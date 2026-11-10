@@ -1,6 +1,7 @@
 import type AnthropicType from "@anthropic-ai/sdk"
 import type { Patient, Task, Urgency } from "./data"
-import { extractTasks, readiness, status } from "./logic"
+import { readiness } from "./logic"
+import { summarizeLocally } from "./summarize"
 
 export type AiMode = "rules" | "key" | "proxy"
 
@@ -52,7 +53,7 @@ const SYSTEM = `You are the discharge-planning assistant on an inpatient hospita
 
 Your job is to turn the round into an accurate update of the discharge checklist:
 
-1. summary: 2-4 sentences in the voice of a concise clinical handoff. Cover where the patient stands clinically, what is blocking discharge, and the plan. This replaces the summary shown on the patient's dashboard.
+1. summary: 2-4 sentences in the voice of a concise clinical handoff. Synthesize; never restate or paraphrase the transcript line by line. Anchor it in this patient's context: their diagnosis and hospital day, the planned disposition and target discharge time, and the checklist. Say how the patient is doing clinically, which checklist items moved this round, what still blocks discharge, and the plan. This replaces the summary shown on the patient's dashboard, and the raw transcript is discarded after the round, so the summary is the record of this round.
 2. findings: 3-6 short phrases (2-5 words each) naming the concrete discharge-relevant facts the team discussed, such as "Ambulated 150 ft with PT" or "Insulin teaching pending".
 3. outlook: one short sentence on discharge timing as the team described it.
 4. newTasks: action items the team said need to happen before or for discharge that are not already on the checklist. Only include work that was actually discussed; never invent tasks from general best practice. If an existing open task already covers the item, do not add it again. Write the title as a short imperative (under 8 words) and the detail as one sentence with the specifics that were said (doses, times, names, distances). Pick the owner from the allowed list who would normally do the work. Urgency: High if it blocks discharge today or is a safety issue, Medium if needed before discharge, Low otherwise. effort is a rough time like "15 min". due is a short phrase like "Due today", "Before discharge", "Due by 2:00 PM" or "Due tomorrow". evidence is a short quote or paraphrase from the transcript or notes that supports the task.
@@ -215,20 +216,9 @@ function sanitize(s: RoundsSummary, p: Patient): RoundsSummary {
   }
 }
 
-// Offline fallback: the built-in keyword rules, no network call.
+// Offline summarizer: ties the round to this patient's checklist in the browser, no network call.
 function summarizeWithRules(p: Patient, transcript: string, notes: string): RoundsSummary {
-  const added = extractTasks(`${transcript}\n${notes}`, p.tasks, p.id)
-  const open = p.tasks.filter((t) => !t.completed).length
-  const words = transcript.trim() ? transcript.trim().split(/\s+/).length : 0
-  return {
-    engine: "rules",
-    summary: `${p.name} (${p.age}${p.sex}, ${p.diagnosis}). ${words ? `Rounds captured ${words} words` : "No transcript captured"}${notes.trim() ? " plus clinical notes" : ""}. ${open} checklist item${open === 1 ? "" : "s"} open; ${added.length} new action item${added.length === 1 ? "" : "s"} found by keyword match. Connect the AI summarizer in Settings for a written summary.`,
-    findings: added.map((t) => t.title),
-    outlook: `${status(p)} · target ${p.target}`,
-    newTasks: added.map(({ id: _id, completed: _c, ...t }) => ({ ...t, evidence: "Keyword match in transcript or notes" })),
-    completed: [],
-    urgency: [],
-  }
+  return sanitize({ engine: "rules", ...summarizeLocally(p, transcript, notes) }, p)
 }
 
 export async function summarizeRounds(p: Patient, transcript: string, notes: string, ai: AiSettings) {

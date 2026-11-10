@@ -42,6 +42,8 @@ export type Patient = {
   trend: number[]
   trendNote: string
   roundedAt: string | null
+  /** Discharge outlook from the last summarized round. */
+  outlook?: string
   coverage: string
   plan: { label: string; value: string }[]
   snf?: { barriers: Barrier[]; referralSentTo?: string }

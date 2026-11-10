@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { aiReady, summarizeRounds, type RoundsSummary } from "../ai"
+import { readiness } from "../logic"
+import { statements } from "../summarize"
 import { formatClock, useAmbientCapture } from "../ambient"
 import type { Patient, Task } from "../data"
 import { useStore } from "../store"
@@ -19,10 +21,15 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
   const [pickDone, setPickDone] = useState<boolean[]>([])
   const [pickUrgency, setPickUrgency] = useState<boolean[]>([])
   const [applied, setApplied] = useState(0)
+  const [transcriptOpen, setTranscriptOpen] = useState(false)
 
   const mic = useAmbientCapture((text) => dispatch({ type: "appendTranscript", pid: patient.id, text }))
   const useClaude = aiReady(state.ai)
   const hasInput = !!(patient.transcript.trim() || patient.notes.trim())
+  const phrases = patient.transcript.split("\n").map((l) => l.trim()).filter(Boolean)
+  const phraseCount = phrases.length
+  const lastHeard = phrases[phraseCount - 1]
+  const statementCount = patient.transcript.trim() ? statements(patient.transcript).length : 0
   const taskById = new Map(patient.tasks.map((t) => [t.id, t]))
 
   const summarize = async () => {
@@ -64,12 +71,15 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
     return (
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-[13px] font-semibold text-[#29463f]">Review rounds summary</h4>
+          <h4 className="text-[13px] font-semibold text-[#29463f]">Rounds summary · {patient.name}</h4>
           <span className="rounded-full bg-[#e4f1ed] px-2.5 py-1 text-[9px] font-semibold text-[#156b52]">
-            {result.engine === "claude" ? "Claude · AI summary" : "Built-in rules"}
+            {result.engine === "claude" ? "Claude · AI summary" : "Built-in summarizer"}
           </span>
           <span className="ml-auto text-[10px] text-[#8a9894]">Nothing changes until you apply.</span>
         </div>
+        <p className="-mt-3 text-[10px] text-[#6c807a]">
+          {patient.diagnosis} · hospital day {patient.los} · {patient.disposition} · target {patient.target} · readiness {readiness(patient)}%
+        </p>
 
         <section className="rounded-xl border border-[#dbe4e1] bg-[#f9fbfa] p-4">
           <p className="text-[12px] leading-[1.7] text-[#3d554f]">{result.summary}</p>
@@ -153,7 +163,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
 
         <div className="flex flex-col-reverse gap-2 border-t border-[#e7ecea] pt-4 sm:flex-row sm:justify-end">
           <button onClick={() => setPhase("capture")} className={secondaryBtn}>
-            Back to transcript
+            Back to capture
           </button>
           <button onClick={apply} className={primaryBtn}>
             <Icon name="check" size={14} />
@@ -176,8 +186,8 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
               {applied ? `${applied} change${applied === 1 ? "" : "s"} applied to the checklist` : "Round finished"}
             </p>
             <p className="mt-0.5 text-[10px] text-[#618078]">
-              {result?.engine === "claude" ? "The dashboard summary was updated from this round. " : ""}
-              Readiness has been recalculated.
+              The summary is saved to {patient.name}'s dashboard and the raw transcript was discarded. Readiness has been
+              recalculated.
             </p>
           </div>
           <a href={`#/patients/${patient.id}`} className="shrink-0 text-[11px] font-semibold text-[#176b54] hover:underline">
@@ -224,7 +234,11 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
             </p>
             <p className={`text-[10px] ${mic.listening ? "text-white/70" : "text-[#7b8b87]"}`}>
               {mic.listening
-                ? mic.interim || "Speak normally at the bedside. Each finished phrase is added to the transcript."
+                ? mic.interim
+                  ? `Hearing: ${mic.interim}`
+                  : lastHeard
+                    ? `Captured ${phraseCount} phrase${phraseCount === 1 ? "" : "s"} · last: “${lastHeard.length > 90 ? `${lastHeard.slice(0, 90)}…` : lastHeard}”`
+                    : "Speak normally at the bedside. The round is summarized when it ends."
                 : mic.supported
                   ? "Start the mic when you reach the bedside. When the round ends, tap End round & summarize."
                   : "Live transcription needs Chrome, Edge or Safari. You can still type or paste the transcript."}
@@ -261,9 +275,24 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
         </p>
       )}
 
-      <label className="block">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="text-[11px] font-semibold text-[#385149]">Rounds transcript</span>
+      <LastRound patient={patient} />
+
+      <details className="group rounded-xl border border-[#e2e9e6] bg-white" open={transcriptOpen} onToggle={(e) => setTranscriptOpen(e.currentTarget.open)}>
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 text-[11px] font-semibold text-[#385149]">
+          <Icon name="chevron" size={12} className="text-[#8a9894] transition group-open:rotate-90" />
+          Raw transcript
+          <span className="font-normal text-[#8a9894]">
+            {statementCount ? `${statementCount} statement${statementCount === 1 ? "" : "s"} captured` : "empty"} · input only, discarded after the round
+          </span>
+        </summary>
+        <div className="space-y-2 border-t border-[#eef2f0] p-3.5">
+          <textarea
+            value={patient.transcript}
+            onChange={(e) => dispatch({ type: "updateRounds", pid: patient.id, transcript: e.target.value, notes: patient.notes })}
+            placeholder="The live transcript appears here. You can also type or paste what was said on rounds."
+            aria-label="Raw transcript"
+            className={`${textareaCls} h-32`}
+          />
           {patient.transcript && !mic.listening && (
             <button
               type="button"
@@ -277,13 +306,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
             </button>
           )}
         </div>
-        <textarea
-          value={patient.transcript}
-          onChange={(e) => dispatch({ type: "updateRounds", pid: patient.id, transcript: e.target.value, notes: patient.notes })}
-          placeholder="The live transcript appears here. You can also type or paste what was said on rounds."
-          className={`${textareaCls} h-32`}
-        />
-      </label>
+      </details>
       <label className="block">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-[#385149]">Documented clinical notes</span>
@@ -302,7 +325,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
         <p className="flex-1">
           {useClaude
             ? "Summaries are written by Claude and shown for review before anything changes."
-            : "Using the built-in keyword rules. Connect Claude in Settings for written summaries and smarter task updates."}{" "}
+            : "Summaries are built in the browser from this patient's checklist and shown for review before anything changes. Connect Claude in Settings for fuller written summaries."}{" "}
           Demo only: don't record real patient information.{" "}
           {mic.engine === "device"
             ? "Speech is transcribed on this device."
@@ -315,6 +338,33 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
         )}
       </div>
     </div>
+  )
+}
+
+function LastRound({ patient }: { patient: Patient }) {
+  return (
+    <section className="rounded-xl border border-[#dbe4e1] bg-[#f9fbfa] p-4" aria-label="Last round summary">
+      <div className="flex flex-wrap items-center gap-2">
+        <h5 className="text-[11px] font-semibold uppercase tracking-wide text-[#6c807a]">Last round summary</h5>
+        <span className="text-[10px] text-[#8a9894]">{patient.roundedAt ? `Rounded ${patient.roundedAt}` : "Not rounded yet today"}</span>
+      </div>
+      <p className="mt-2 text-[12px] leading-[1.7] text-[#3d554f]">{patient.summary}</p>
+      {patient.detected.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {patient.detected.map((f) => (
+            <span key={f} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#3f6a5d] ring-1 ring-[#d7e5e0]">
+              {f}
+            </span>
+          ))}
+        </div>
+      )}
+      {patient.outlook && (
+        <p className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-[#2f6b5a]">
+          <Icon name="calendar" size={12} />
+          {patient.outlook}
+        </p>
+      )}
+    </section>
   )
 }
 

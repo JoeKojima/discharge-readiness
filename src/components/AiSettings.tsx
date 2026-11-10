@@ -4,7 +4,7 @@ import { useStore } from "../store"
 import { Icon, card, inputCls, labelCls, secondaryBtn } from "../ui"
 
 const modes: { id: AiMode; label: string; detail: string }[] = [
-  { id: "rules", label: "Built-in rules", detail: "Keyword matching in the browser. No AI, no setup." },
+  { id: "rules", label: "Built-in summarizer", detail: "Runs in the browser and ties the round to the patient's checklist. No AI, no setup." },
   { id: "key", label: "My Anthropic API key", detail: "Calls Claude directly from this browser. Best for trying it yourself." },
   { id: "proxy", label: "Team proxy", detail: "Calls Claude through your Cloudflare Worker, which holds the key. Best for sharing the site." },
 ]

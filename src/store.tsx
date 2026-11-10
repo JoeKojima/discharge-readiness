@@ -129,7 +129,8 @@ function reducer(state: State, action: Action): State {
     case "appendTranscript":
       return mapPatient(state, action.pid, (p) => ({
         ...p,
-        transcript: p.transcript.trim() ? `${p.transcript.trimEnd()} ${action.text}` : action.text,
+        // One finished phrase per line, so the summarizer can tell statements apart.
+        transcript: p.transcript.trim() ? `${p.transcript.trimEnd()}\n${action.text}` : action.text,
       }))
     case "applyRounds": {
       const done = new Set(action.complete)
@@ -137,8 +138,11 @@ function reducer(state: State, action: Action): State {
       const time = nowTime()
       return mapPatient(state, action.pid, (p) => ({
         ...p,
-        summary: action.summary.engine === "claude" ? action.summary.summary : p.summary,
-        detected: action.summary.engine === "claude" && action.summary.findings.length ? action.summary.findings : p.detected,
+        // The summary is the record of the round; the raw transcript isn't kept.
+        summary: action.summary.summary,
+        detected: action.summary.findings.length ? action.summary.findings : p.detected,
+        outlook: action.summary.outlook,
+        transcript: "",
         roundedAt: time,
         tasks: [
           ...p.tasks.map((t) =>

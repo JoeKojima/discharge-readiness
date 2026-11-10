@@ -16,6 +16,7 @@ import {
   type Urgency,
 } from "./data"
 import { nowTime } from "./logic"
+import { defaultAiSettings, type AiSettings, type RoundsSummary } from "./ai"
 
 export type Settings = {
   highPriorityAlerts: boolean
@@ -31,6 +32,7 @@ export type State = {
   patients: Patient[]
   threads: Thread[]
   settings: Settings
+  ai: AiSettings
 }
 
 const VERSION = 2
@@ -48,6 +50,7 @@ export const initialState = (): State => ({
     dailyDigest: false,
     showCompleted: true,
   },
+  ai: { ...defaultAiSettings },
 })
 
 type Action =
@@ -60,6 +63,9 @@ type Action =
   | { type: "dischargePatient"; pid: string }
   | { type: "updateRounds"; pid: string; transcript: string; notes: string }
   | { type: "markRounded"; pid: string }
+  | { type: "appendTranscript"; pid: string; text: string }
+  | { type: "applyRounds"; pid: string; summary: RoundsSummary; tasks: Task[]; complete: string[]; urgency: { taskId: string; urgency: Urgency }[] }
+  | { type: "aiConfig"; ai: Partial<AiSettings> }
   | { type: "sendReferral"; pid: string; facility: string }
   | { type: "sendMessage"; threadId: string; text: string; from: "me" | "them" }
   | { type: "startThread"; thread: Thread }
@@ -120,6 +126,34 @@ function reducer(state: State, action: Action): State {
         transcript: action.transcript,
         notes: action.notes,
       }))
+    case "appendTranscript":
+      return mapPatient(state, action.pid, (p) => ({
+        ...p,
+        transcript: p.transcript.trim() ? `${p.transcript.trimEnd()} ${action.text}` : action.text,
+      }))
+    case "applyRounds": {
+      const done = new Set(action.complete)
+      const urg = new Map(action.urgency.map((u) => [u.taskId, u.urgency]))
+      const time = nowTime()
+      return mapPatient(state, action.pid, (p) => ({
+        ...p,
+        summary: action.summary.engine === "claude" ? action.summary.summary : p.summary,
+        detected: action.summary.engine === "claude" && action.summary.findings.length ? action.summary.findings : p.detected,
+        roundedAt: time,
+        tasks: [
+          ...p.tasks.map((t) =>
+            done.has(t.id)
+              ? { ...t, completed: true, due: `Completed ${time}` }
+              : urg.has(t.id)
+                ? { ...t, urgency: urg.get(t.id)! }
+                : t,
+          ),
+          ...action.tasks,
+        ],
+      }))
+    }
+    case "aiConfig":
+      return { ...state, ai: { ...state.ai, ...action.ai } }
     case "markRounded":
       return mapPatient(state, action.pid, (p) => ({ ...p, roundedAt: nowTime() }))
     case "sendReferral":
@@ -156,7 +190,8 @@ function reducer(state: State, action: Action): State {
     case "signIn":
       return { ...state, signedIn: true }
     case "reset":
-      return initialState()
+      // Keep the AI connection when demo data is reset.
+      return { ...initialState(), ai: state.ai }
   }
 }
 
@@ -165,7 +200,7 @@ function load(): State {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as State
-      if (parsed.version === VERSION) return parsed
+      if (parsed.version === VERSION) return { ...parsed, ai: { ...defaultAiSettings, ...parsed.ai } }
     }
   } catch {
     // storage unavailable or corrupt: fall back to seed data

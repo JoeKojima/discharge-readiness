@@ -5,7 +5,7 @@ export type IconName =
   | "chevron" | "clock" | "close" | "document" | "dollar" | "home" | "logout"
   | "menu" | "message" | "more" | "patients" | "plus" | "search" | "settings"
   | "shield" | "sparkles" | "stethoscope" | "user" | "trash" | "send" | "login"
-  | "flag" | "refresh"
+  | "flag" | "refresh" | "mic" | "stop"
 
 const paths: Record<IconName, ReactNode> = {
   activity: (
@@ -138,6 +138,13 @@ const paths: Record<IconName, ReactNode> = {
   ),
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
   send: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />,
+  mic: (
+    <>
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8" />
+    </>
+  ),
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
   login: (
     <>
       <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useStore, type Settings as SettingsType } from "../store"
 import { Icon, Modal, PageHeader, card } from "../ui"
+import { AiSettingsCard } from "../components/AiSettings"
 
 const toggles: { key: keyof SettingsType; label: string; detail: string }[] = [
   { key: "highPriorityAlerts", label: "High-priority task alerts", detail: "Notify me when a high-urgency task is overdue." },
@@ -15,7 +16,7 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader crumb="Settings" title="Settings" subtitle="Your profile, notifications, and demo data." />
+      <PageHeader crumb="Settings" title="Settings" subtitle="Your profile, notifications, AI summarizer and demo data." />
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <section className={`${card} p-5 md:p-6`}>
           <h3 className="text-[13px] font-semibold text-[#29463f]">Profile</h3>
@@ -68,6 +69,8 @@ export function Settings() {
             })}
           </ul>
         </section>
+
+        <AiSettingsCard />
 
         <section className={`${card} p-5 md:p-6 lg:col-span-2`}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">

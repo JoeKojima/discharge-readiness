@@ -1,6 +1,6 @@
 import { readiness, status } from "../logic"
 import { navigate, useStore } from "../store"
-import { RoundsEditor } from "../components/Modals"
+import { RoundsEditor } from "../components/RoundsEditor"
 import { Avatar, Icon, PageHeader, StatusBadge, card, secondaryBtn } from "../ui"
 import type { Patient } from "../data"
 
@@ -55,7 +55,7 @@ export function Rounds({ patient }: { patient: Patient }) {
           </ul>
         </section>
 
-        <section className={`${card} p-5 md:p-6`}>
+        <section className={`${card} order-first p-5 md:p-6 lg:order-last`}>
           <div className="mb-5 flex flex-col gap-3 border-b border-[#e7ecea] pb-5 sm:flex-row sm:items-center">
             <Avatar initials={patient.initials} color={patient.color} size={44} />
             <div className="min-w-0 flex-1">
@@ -87,11 +87,6 @@ export function Rounds({ patient }: { patient: Patient }) {
             </div>
           </div>
           <RoundsEditor key={patient.id} patient={patient} />
-          <p className="mt-4 flex items-start gap-2 text-[10px] leading-relaxed text-[#8a9894]">
-            <Icon name="shield" size={12} className="mt-0.5 shrink-0" />
-            Edits save automatically in this browser. The checklist generator matches the transcript and notes against
-            discharge rules and only adds tasks that aren't already on the patient's checklist.
-          </p>
         </section>
       </div>
     </>

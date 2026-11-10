@@ -192,20 +192,35 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <button
-            onClick={mic.listening ? mic.stop : mic.start}
+            onClick={mic.listening || mic.preparing ? mic.stop : mic.start}
             disabled={phase === "summarizing"}
             aria-pressed={mic.listening}
-            aria-label={mic.listening ? "Pause ambient capture" : "Start ambient capture"}
+            aria-label={mic.listening ? "Pause ambient capture" : mic.preparing ? "Cancel ambient capture" : "Start ambient capture"}
             className={`relative grid h-14 w-14 shrink-0 place-items-center rounded-full transition disabled:opacity-50 ${
               mic.listening ? "bg-[#e0594a] text-white hover:bg-[#c94b3d]" : "bg-[#156d53] text-white hover:bg-[#105b45]"
             }`}
           >
             {mic.listening && <span className="absolute inset-0 animate-ping rounded-full bg-[#e0594a]/40" />}
-            <Icon name={mic.listening ? "stop" : "mic"} size={22} className="relative" />
+            {mic.preparing ? (
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <Icon name={mic.listening ? "stop" : "mic"} size={22} className="relative" />
+            )}
           </button>
           <div className="min-w-0 flex-1">
             <p className={`text-[12px] font-semibold ${mic.listening ? "text-white" : "text-[#29463f]"}`}>
-              {mic.listening ? `Listening · ${formatClock(mic.elapsed)}` : mic.elapsed ? `Paused · ${formatClock(mic.elapsed)}` : "Ambient capture"}
+              {mic.listening
+                ? `Listening · ${formatClock(mic.elapsed)}`
+                : mic.preparing
+                  ? mic.preparingLabel
+                  : mic.elapsed
+                    ? `Paused · ${formatClock(mic.elapsed)}`
+                    : "Ambient capture"}
+              {mic.listening && mic.engine && (
+                <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-medium">
+                  {mic.engine === "device" ? "On-device" : "Browser cloud speech"}
+                </span>
+              )}
             </p>
             <p className={`text-[10px] ${mic.listening ? "text-white/70" : "text-[#7b8b87]"}`}>
               {mic.listening
@@ -288,7 +303,10 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
           {useClaude
             ? "Summaries are written by Claude and shown for review before anything changes."
             : "Using the built-in keyword rules. Connect Claude in Settings for written summaries and smarter task updates."}{" "}
-          Demo only: don't record real patient information. The browser's speech service may send audio to Google or Apple.
+          Demo only: don't record real patient information.{" "}
+          {mic.engine === "device"
+            ? "Speech is transcribed on this device."
+            : "When on-device speech isn't available, the browser's speech service may send audio to Google or Apple."}
         </p>
         {!useClaude && (
           <a href="#/settings" className="shrink-0 font-semibold text-[#176b54] hover:underline">

@@ -39,12 +39,12 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 ## What works
 
 - **Ambient rounds** (Rounds page, or **Generate checklist** in the header): tap the mic at the bedside and the browser's speech recognition transcribes the conversation live into the patient's transcript. Tap **End round & summarize** and the summarizer returns a clinical summary, key findings, a discharge outlook, new tasks, tasks the team said are done, and urgency changes, each with the supporting quote. You tick which changes to keep and click **Apply**. Nothing changes until you apply.
-  - Live transcription works in Chrome, Edge and Safari. Other browsers can still type or paste a transcript.
+  - Live transcription uses on-device speech recognition when the browser offers it (audio stays on the computer; the first use may download a language pack), and otherwise the browser's cloud speech service. It works in Chrome, Edge and Safari. Browsers whose cloud speech service is unavailable (Brave, Arc, Opera, Vivaldi, in-app browsers, or networks that block it) show a message instead, and you can still type or paste a transcript.
   - **Summarizer options** (Settings → AI rounds summarizer):
     - **Built-in rules** (default): keyword matching in the browser. No setup and no AI; finds new tasks only.
     - **My Anthropic API key**: calls Claude (`claude-opus-5-5`) straight from the browser. The key is stored only in that browser.
     - **Team proxy**: calls Claude through a small Cloudflare Worker that holds the key, so the shared site never contains it. Setup is in [`proxy/README.md`](proxy/README.md).
-  - **Demo only:** don't record real patient information. Browser speech recognition may send audio to Google or Apple, and none of this is set up for HIPAA.
+  - **Demo only:** don't record real patient information. When on-device recognition isn't available, browser speech recognition may send audio to Google or Apple, and none of this is set up for HIPAA.
 - Checking off, re-prioritizing (task ⋯ menu), deleting, and adding tasks updates readiness, status, open effort, the primary blocker, and the unit dashboard.
 - Readiness = baseline + remaining share × fraction of tasks complete. Status is derived from readiness and open high-priority tasks.
 - When every task is done, **Discharge patient** removes the patient from the list.
@@ -55,7 +55,7 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 
 - `src/data.ts`: seed patients, staff, message threads, facilities
 - `src/logic.ts`: readiness and status math, checklist extraction rules
-- `src/ambient.ts`: live mic transcription (Web Speech API)
+- `src/ambient.ts`: live mic transcription (Web Speech API, on-device first)
 - `src/ai.ts`: Claude rounds summarizer (prompt, JSON schema, rule-based fallback)
 - `src/store.tsx`: app state (reducer and localStorage) and hash router
 - `src/ui.tsx`: icons and shared UI components

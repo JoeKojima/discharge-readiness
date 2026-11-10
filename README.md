@@ -23,12 +23,33 @@ The Vite `base` is set to `./`, so the build works under any repository name or 
 
 Run `npm run build` and publish the contents of `dist/` (for example, to a `gh-pages` branch).
 
+## Pages
+
+Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh works on GitHub Pages without server configuration.
+
+| Page | Route | What it does |
+| --- | --- | --- |
+| Overview | `#/patients/<id>` | Discharge command center for one patient: readiness ring, primary blocker, checklist, AI summary, discharge plan, care team, and SNF facility comparison for patients going to a facility. |
+| My patients | `#/patients` | Dashboard of all patients with unit stats, search, status filters, sorting, and **Add patient**. |
+| Tasks | `#/tasks` | Every task across patients, with filters for patient, owner, urgency and status, plus **Add task**. |
+| Rounds | `#/rounds/<id>` | Rounding list and per-patient transcript and notes editor that generates checklist tasks. |
+| Messages | `#/messages` | Care team inbox with threads tied to patients. Sending a message gets a simulated reply. |
+| Settings | `#/settings` | Profile, preference toggles, and **Reset demo data**. |
+
 ## What works
 
-- **Generate checklist**: edit the rounds transcript or clinical notes, then generate. A rule-based extractor in the browser picks out action items (oxygen/DME, PT/ambulation, transport, prescriptions, labs, follow-up, home safety, prior auth, and more) and adds any that are new to the checklist.
-- Checking off tasks updates the readiness ring, open-task count, estimated effort and primary blocker.
-- Search and filters (All / Open / Completed). Tasks are sorted by urgency.
-- **View task** jumps to the current primary blocker.
-- Patient switcher, facility comparison, "Send referral" confirmation, and a mobile navigation drawer.
+- **Generate checklist** (header, Overview, Rounds): a rule-based extractor in the browser reads the rounds transcript and notes and adds any action items not already on the patient's checklist (oxygen/DME, PT, transport, prescriptions, labs, follow-up, home health, PICC, prior auth, coverage, and more).
+- Checking off, re-prioritizing (task ⋯ menu), deleting, and adding tasks updates readiness, status, open effort, the primary blocker, and the unit dashboard.
+- Readiness = baseline + remaining share × fraction of tasks complete. Status is derived from readiness and open high-priority tasks.
+- When every task is done, **Discharge patient** removes the patient from the list.
+- Patient switcher, care team modal (message any member), SNF referrals, sign out / sign in, and a 404 page.
+- All changes are saved in the browser (localStorage). **Settings → Reset demo data** restores the 8 seed patients.
 
-State resets on page reload.
+## Code layout
+
+- `src/data.ts`: seed patients, staff, message threads, facilities
+- `src/logic.ts`: readiness and status math, checklist extraction rules
+- `src/store.tsx`: app state (reducer and localStorage) and hash router
+- `src/ui.tsx`: icons and shared UI components
+- `src/components/`: task row and modals
+- `src/pages/`: one file per page

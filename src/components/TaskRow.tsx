@@ -100,6 +100,16 @@ export function TaskRow({
             {task.effort} effort
           </span>
           <span className="rounded bg-[#f1f4f3] px-1.5 py-0.5">{task.category}</span>
+          {task.automation && (
+            <a href="#/tasks" className="flex items-center gap-1 rounded bg-[#e2f1ec] px-1.5 py-0.5 font-semibold text-[#176b54] hover:underline">
+              <Icon name="bolt" size={10} />
+              {task.automation.state === "waiting"
+                ? task.automation.log[task.automation.log.length - 1].text
+                : task.automation.state === "escalated"
+                  ? `Escalated to ${task.owner}`
+                  : "Automated"}
+            </a>
+          )}
         </div>
       </div>
     </div>

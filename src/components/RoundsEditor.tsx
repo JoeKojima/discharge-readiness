@@ -3,7 +3,8 @@ import { aiReady, summarizeRounds, type RoundsSummary } from "../ai"
 import { readiness } from "../logic"
 import { statements } from "../summarize"
 import { formatClock, useAmbientCapture } from "../ambient"
-import type { Patient, Task } from "../data"
+import { emptyAssessment, type AGKey, type Assessment, type Patient, type Task } from "../data"
+import { AssessmentEditor, AssessmentList, SummaryPoints } from "./ClinicalSummary"
 import { useStore } from "../store"
 import { Icon, UrgencyBadge, primaryBtn, secondaryBtn } from "../ui"
 
@@ -22,6 +23,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
   const [pickUrgency, setPickUrgency] = useState<boolean[]>([])
   const [applied, setApplied] = useState(0)
   const [transcriptOpen, setTranscriptOpen] = useState(false)
+  const [ag, setAg] = useState<Assessment>(emptyAssessment)
 
   const mic = useAmbientCapture((text) => dispatch({ type: "appendTranscript", pid: patient.id, text }))
   const useClaude = aiReady(state.ai)
@@ -42,6 +44,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
       setPickTasks(s.newTasks.map(() => true))
       setPickDone(s.completed.map(() => true))
       setPickUrgency(s.urgency.map(() => true))
+      setAg(s.assessment)
       setPhase("review")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Summarizing failed.")
@@ -57,7 +60,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
       .map(({ evidence: _e, ...t }, i) => ({ ...t, id: `${patient.id}-r${now}-${i}`, completed: false }))
     const complete = result.completed.filter((_, i) => pickDone[i]).map((c) => c.taskId)
     const urgency = result.urgency.filter((_, i) => pickUrgency[i])
-    dispatch({ type: "applyRounds", pid: patient.id, summary: result, tasks, complete, urgency })
+    dispatch({ type: "applyRounds", pid: patient.id, summary: { ...result, assessment: ag }, tasks, complete, urgency })
     const count = tasks.length + complete.length + urgency.length
     setApplied(count)
     setPhase("applied")
@@ -82,7 +85,7 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
         </p>
 
         <section className="rounded-xl border border-[#dbe4e1] bg-[#f9fbfa] p-4">
-          <p className="text-[12px] leading-[1.7] text-[#3d554f]">{result.summary}</p>
+          <SummaryPoints points={result.summary} />
           {result.findings.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {result.findings.map((f) => (
@@ -98,6 +101,16 @@ export function RoundsEditor({ patient }: { patient: Patient }) {
               {result.outlook}
             </p>
           )}
+        </section>
+
+        <section aria-label="A–G assessment">
+          <h5 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6c807a]">A–G assessment</h5>
+          <p className="mb-3 text-[10px] text-[#8a9894]">Edit anything that's wrong. Letters left blank keep the previous finding.</p>
+          <AssessmentEditor
+            value={ag}
+            previous={patient.assessment}
+            onChange={(k: AGKey, text) => setAg((a) => ({ ...a, [k]: text }))}
+          />
         </section>
 
         <ChangeGroup title="New tasks" count={result.newTasks.length} empty="No new action items were discussed.">
@@ -348,16 +361,12 @@ function LastRound({ patient }: { patient: Patient }) {
         <h5 className="text-[11px] font-semibold uppercase tracking-wide text-[#6c807a]">Last round summary</h5>
         <span className="text-[10px] text-[#8a9894]">{patient.roundedAt ? `Rounded ${patient.roundedAt}` : "Not rounded yet today"}</span>
       </div>
-      <p className="mt-2 text-[12px] leading-[1.7] text-[#3d554f]">{patient.summary}</p>
-      {patient.detected.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {patient.detected.map((f) => (
-            <span key={f} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#3f6a5d] ring-1 ring-[#d7e5e0]">
-              {f}
-            </span>
-          ))}
+      <div className="mt-3 grid gap-4 md:grid-cols-[1.1fr_1fr]">
+        <SummaryPoints points={patient.summary} />
+        <div className="border-t border-[#e3ebe8] pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
+          <AssessmentList assessment={patient.assessment} compact />
         </div>
-      )}
+      </div>
       {patient.outlook && (
         <p className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-[#2f6b5a]">
           <Icon name="calendar" size={12} />

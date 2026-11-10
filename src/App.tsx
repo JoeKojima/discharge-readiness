@@ -53,8 +53,9 @@ function Shell() {
 
   const unread = state.threads.filter((t) => t.unread).length
   const openCount = state.patients.reduce((n, p) => n + openTasks(p).length, 0)
+  // Overview is the unit-wide patient dashboard; My patients is each patient's discharge command centre.
   const active =
-    section === "" || (section === "patients" && routeId)
+    section === ""
       ? "Overview"
       : section === "patients"
         ? "My patients"
@@ -69,8 +70,8 @@ function Shell() {
                 : ""
 
   const navItems: { label: string; icon: IconName; href: string; count?: number }[] = [
-    { label: "Overview", icon: "home", href: `#/patients/${state.selectedId}` },
-    { label: "My patients", icon: "patients", href: "#/patients", count: state.patients.length },
+    { label: "Overview", icon: "home", href: "#/" },
+    { label: "My patients", icon: "patients", href: `#/patients/${state.selectedId}`, count: state.patients.length },
     { label: "Tasks", icon: "check", href: "#/tasks", count: openCount },
     { label: "Rounds", icon: "stethoscope", href: `#/rounds/${state.selectedId}` },
     { label: "Messages", icon: "message", href: "#/messages", count: unread || undefined },
@@ -81,9 +82,9 @@ function Shell() {
 
   let page
   if (!knownSection || missingPatient) page = <NotFound />
-  else if (!patient && ["", "rounds"].includes(section)) page = <EmptyList />
-  else if (section === "" || (section === "patients" && routeId)) page = <Overview key={patient!.id} patient={patient!} />
-  else if (section === "patients") page = <Patients />
+  else if (section === "") page = <Patients />
+  else if (!patient && ["patients", "rounds"].includes(section)) page = <EmptyList />
+  else if (section === "patients") page = <Overview key={patient!.id} patient={patient!} />
   else if (section === "tasks") page = <Tasks />
   else if (section === "rounds") page = <Rounds patient={patient!} />
   else if (section === "messages") page = <Messages key={routeId ?? "inbox"} threadId={routeId} />
@@ -101,7 +102,7 @@ function Shell() {
           mobileNav ? "z-50 flex shadow-2xl" : "hidden"
         }`}
       >
-        <a href="#/patients" onClick={() => setMobileNav(false)} className="flex h-[78px] items-center gap-3 border-b border-[#e7ecea] px-6">
+        <a href="#/" onClick={() => setMobileNav(false)} className="flex h-[78px] items-center gap-3 border-b border-[#e7ecea] px-6">
           <div className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#126b51] text-white">
             <Icon name="activity" size={21} />
           </div>
@@ -237,8 +238,8 @@ function NotFound() {
     <div className="grid place-items-center py-24 text-center">
       <p className="text-[40px] font-semibold text-[#173b33]">404</p>
       <p className="mt-1 text-[13px] text-[#70807c]">That page or patient doesn't exist.</p>
-      <button onClick={() => navigate("/patients")} className="mt-5 rounded-xl bg-[#156d53] px-4 py-2.5 text-[12px] font-semibold text-white">
-        Go to my patients
+      <button onClick={() => navigate("/")} className="mt-5 rounded-xl bg-[#156d53] px-4 py-2.5 text-[12px] font-semibold text-white">
+        Go to overview
       </button>
     </div>
   )
@@ -249,7 +250,7 @@ function EmptyList() {
     <div className="grid place-items-center py-24 text-center">
       <p className="text-[18px] font-semibold text-[#173b33]">No patients on your list</p>
       <p className="mt-1 text-[13px] text-[#70807c]">Add a patient from the patient dashboard to get started.</p>
-      <button onClick={() => navigate("/patients")} className="mt-5 rounded-xl bg-[#156d53] px-4 py-2.5 text-[12px] font-semibold text-white">
+      <button onClick={() => navigate("/")} className="mt-5 rounded-xl bg-[#156d53] px-4 py-2.5 text-[12px] font-semibold text-white">
         Open patient dashboard
       </button>
     </div>
@@ -268,7 +269,7 @@ function SignedOut({ onSignIn }: { onSignIn: () => void }) {
         <button
           onClick={() => {
             onSignIn()
-            navigate("/patients")
+            navigate("/")
           }}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#156d53] px-4 py-3 text-[13px] font-semibold text-white hover:bg-[#105b45]"
         >

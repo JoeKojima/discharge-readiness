@@ -171,3 +171,64 @@ export function formatMinutes(total: number) {
 export function nowTime() {
   return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
 }
+
+// ---- Due times ---------------------------------------------------------------
+
+const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+function atClock(base: Date, text: string): Date | null {
+  const m = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i)
+  if (!m) return null
+  let h = Number(m[1]) % 12
+  if (m[3].toLowerCase() === "pm") h += 12
+  const d = new Date(base)
+  d.setHours(h, Number(m[2] ?? 0), 0, 0)
+  return d
+}
+
+/** When a task is due, parsed from its due label ("Due by 2:30 PM", "Due today", "Before discharge"…). */
+export function dueAt(task: Task, patient: Patient, now = new Date()): Date | null {
+  if (task.completed) return null
+  const due = task.due.toLowerCase()
+  const rel = due.match(/in (\d+)\s*(min|minute|hour|hr|h)/)
+  if (rel) return new Date(now.getTime() + Number(rel[1]) * (rel[2].startsWith("m") ? 60_000 : 3_600_000))
+  let label = due
+  if (/before discharge|at discharge/.test(due)) label = patient.target.toLowerCase()
+  const day = new Date(now)
+  if (/tomorrow/.test(label)) day.setDate(day.getDate() + 1)
+  const wd = weekdays.findIndex((w) => label.includes(w))
+  if (wd >= 0) day.setDate(day.getDate() + ((wd - day.getDay() + 7) % 7 || 7))
+  const timed = atClock(day, label)
+  if (timed) return timed
+  if (/today|tomorrow|tonight/.test(label) || wd >= 0) {
+    const d = new Date(day)
+    d.setHours(/tonight/.test(label) ? 20 : 17, 0, 0, 0) // end of the day shift
+    return d
+  }
+  return null
+}
+
+export type DueBucket = "Overdue" | "Due in the next hour" | "Later today" | "Tomorrow and later" | "No due time"
+export const dueBuckets: DueBucket[] = ["Overdue", "Due in the next hour", "Later today", "Tomorrow and later", "No due time"]
+
+export function dueBucket(at: Date | null, now = new Date()): DueBucket {
+  if (!at) return "No due time"
+  const diff = at.getTime() - now.getTime()
+  if (diff < 0) return "Overdue"
+  if (diff <= 3_600_000) return "Due in the next hour"
+  return at.toDateString() === now.toDateString() ? "Later today" : "Tomorrow and later"
+}
+
+export function clockTime(d: Date) {
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
+
+/** "in 25 min", "2 h 10 min overdue", "Fri 10:00 AM". */
+export function relativeDue(at: Date, now = new Date()) {
+  const mins = Math.round((at.getTime() - now.getTime()) / 60_000)
+  const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`)
+  if (mins < 0) return `${span(-mins)} overdue`
+  if (at.toDateString() !== now.toDateString())
+    return at.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })
+  return mins === 0 ? "now" : `in ${span(mins)}`
+}

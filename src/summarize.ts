@@ -1,13 +1,15 @@
-import type { Patient, Task, Urgency } from "./data"
+import { agKeys, emptyAssessment, type AGKey, type Assessment, type Patient, type Task, type Urgency } from "./data"
 import { extractionRules, readiness, status } from "./logic"
 
 // Built-in rounds summarizer (no AI service). It reads the round statement by
 // statement, ties each one to this patient's diagnosis and checklist, and
-// writes a short handoff: clinical status, what got done, what still blocks
-// discharge, and the plan. It does not repeat the transcript.
+// writes a short handoff as dot points (clinical status, what got done, what
+// still blocks discharge, the plan) plus an A–G assessment. It does not repeat
+// the transcript.
 
 export type LocalSummary = {
-  summary: string
+  summary: string[]
+  assessment: Assessment
   findings: string[]
   outlook: string
   newTasks: (Omit<Task, "id" | "completed"> & { evidence: string })[]
@@ -16,6 +18,31 @@ export type LocalSummary = {
 }
 
 type Topic = { label: string; pattern: RegExp; clinical?: boolean }
+
+// A–G assessment: which letter a clinical clause belongs to.
+const agPatterns: Record<AGKey, RegExp> = {
+  A: /airway|patent|(speaking|talking) (in )?(full )?sentences|talking normally|stridor|secretions|protecting (his|her|their) airway/,
+  B: /breath|resp(iratory)? rate|\brr\b|\bsats?\b|spo2|sp02|o2 sat|saturat|oxygen|\bo2\b|lit(er|re)s?\b|\d\s?l\b|nasal cannula|\bnc\b|room air|\bra\b|wheez|crackles|chest|cough|sputum|\bnebs?\b|cxr|x-?ray|dyspn|short of breath|\bsob\b/,
+  C: /heart rate|\bhr\b|pulse|blood pressure|\bbp\b|\d{2,3}\/\d{2,3}|tachy|brady|perfus|cap(illary)? refill|\bcrt\b|hypotens|hypertens|\baf\b|atrial|rhythm|h(a)?emoglobin|\bhb\b|\bhgb\b|bleed|transfus|o(e)?dema|troponin|lactate|sepsis/,
+  D: /alert|orient|confus|delirium|\bgcs\b|drows|neuro|\bpain\b|sedat|agitat|mental status|calm|restrain|headache|dizz/,
+  E: /fever|febrile|\btemp|wound|incision|port sites?|skin|rash|redness|erythema|cellulitis|swelling|drain|dressing|\bpicc\b|cannula site|pressure (area|injur)|cultures?|infect|antibiotic|cephalexin|amoxicillin|ertapenem/,
+  F: /fluid|\biv\b|drip|eating|drinking|diet|appetite|nause|vomit|bowel|stool|urine|voiding|catheter|output|intake|net (negative|positive)|euvol|creatinine|kidney|renal|potassium|sodium|electrolyte|lasix|furosemide|diure/,
+  G: /glucose|sugars?\b|\bbsl\b|\bbgl\b|insulin|glargine|lispro|hypoglyc|hyperglyc|a1c|ketone|anion gap|closed (his|her|the) gap|diabet/,
+}
+
+function assess(clauses: string[]): Assessment {
+  const out = emptyAssessment()
+  const found: Record<AGKey, string[]> = { A: [], B: [], C: [], D: [], E: [], F: [], G: [] }
+  for (const c of clauses) {
+    const lower = c.toLowerCase()
+    for (const k of agKeys) if (agPatterns[k].test(lower) && found[k].length < 2 && !found[k].includes(c)) found[k].push(c)
+  }
+  for (const k of agKeys) {
+    const text = found[k].map((c, i) => (i ? lowerFirst(clip(c, 12)) : clip(c, 12))).join("; ")
+    out[k] = text.charAt(0).toUpperCase() + text.slice(1)
+  }
+  return out
+}
 
 // Topics clinicians talk about on discharge rounds. `clinical` topics describe
 // how the patient is doing; the rest are logistics.
@@ -96,7 +123,7 @@ export function statements(text: string): string[] {
     const parts = s.split(/\s+(?=(?:but|and then|also|so we|then we|and we|and she|and he)\s)/i)
     for (let p of parts) {
       p = p.trim().replace(/^(but|and then|also|so|and)\s+/i, "").replace(/[.,;\s]+$/, "")
-      if (p.split(/\s+/).length < 3 || smallTalk.test(p.toLowerCase())) continue
+      if (p.split(/\s+/).length < 2 || smallTalk.test(p.toLowerCase())) continue
       out.push(p.charAt(0).toUpperCase() + p.slice(1))
     }
   }
@@ -206,19 +233,30 @@ export function summarizeLocally(p: Patient, transcript: string, notes: string):
   const before = readiness(p)
   const projected = readiness(after)
 
-  const parts: string[] = []
-  parts.push(
-    `${p.name}, ${p.age}${p.sex}, hospital day ${p.los} for ${p.diagnosis}${
-      clinical.length ? `: ${list(clinical.map((s) => lowerFirst(clip(s.text))))}` : ""
-    }.`,
+  const points: string[] = []
+  points.push(
+    `${p.diagnosis}, hospital day ${p.los}${clinical.length ? ` — ${list(clinical.map((s) => lowerFirst(clip(s.text))))}` : ""}`,
   )
-  if (completed.length) parts.push(`Done since last round: ${list(completed.map((c) => shortTitle(p.tasks.find((t) => t.id === c.taskId)!)))}.`)
-  if (blockers.length) parts.push(`Still blocking ${p.disposition.toLowerCase()}: ${list(blockers.map(shortTitle))}.`)
-  else if (unlinkedPending.length) parts.push(`Still pending: ${lowerFirst(clip(unlinkedPending[0].text, 12))}.`)
-  else if (open.length === completed.length) parts.push("No open checklist items remain.")
-  if (newTasks.length) parts.push(`New from rounds: ${list(newTasks.map(shortTitle))}.`)
+  if (completed.length) points.push(`Done since last round: ${list(completed.map((c) => shortTitle(p.tasks.find((t) => t.id === c.taskId)!)))}`)
+  if (blockers.length) points.push(`Still blocking ${p.disposition.toLowerCase()}: ${list(blockers.map(shortTitle))}`)
+  else if (unlinkedPending.length) points.push(`Still pending: ${lowerFirst(clip(unlinkedPending[0].text, 12))}`)
+  else if (open.length === completed.length) points.push("No open checklist items remain")
+  if (newTasks.length) points.push(`New from rounds: ${list(newTasks.map(shortTitle))}`)
+  points.push(
+    timing
+      ? `Plan: ${lowerFirst(clip(timing.text.replace(/^(the )?plan (is )?(to )?/i, ""), 16))}`
+      : `Plan: ${p.disposition.toLowerCase()}, target ${p.target}`,
+  )
   if (!sts.some((s) => s.topics.length || s.task || s.action || s.pending))
-    parts.push("Nothing discharge-related was captured on this round.")
+    points.splice(1, 0, "Nothing discharge-related was captured on this round")
+
+  // A–G from the clinical clauses (requests and checklist chatter are tasks, not assessment).
+  const clauses = sts
+    .filter((s) => !s.action && !(s.task && !s.topics.some((t) => t.clinical)))
+    .flatMap((s) => s.text.split(/\s*[,;]\s*|\s+and\s+(?=(?:he|she|they|his|her|no|on|is|was|pain|sats?|bp|hr)\b)/i))
+    .map((c) => c.trim())
+    .filter(Boolean)
+  const assessment = assess(clauses)
 
   // Findings: one short line per thing discussed, tied to the checklist where possible.
   const findings: string[] = []
@@ -234,5 +272,5 @@ export function summarizeLocally(p: Patient, transcript: string, notes: string):
   const statusAfter = status(after)
   const outlook = `${timing ? `${clip(timing.text, 16)} · ` : ""}${statusAfter} · readiness ${before}% → ${projected}% · target ${p.target}`
 
-  return { summary: parts.join(" "), findings, outlook, newTasks, completed, urgency }
+  return { summary: points, assessment, findings, outlook, newTasks, completed, urgency }
 }

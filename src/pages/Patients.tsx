@@ -58,7 +58,7 @@ export function Patients() {
   return (
     <>
       <PageHeader
-        crumb="My patients"
+        crumb="Overview"
         title="Patient dashboard"
         subtitle="Discharge readiness for every patient on your list."
         actions={
@@ -93,7 +93,7 @@ export function Patients() {
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h3 className="text-[16px] font-semibold tracking-[-.02em] text-[#1b4037]">All patients</h3>
-              <p className="mt-0.5 text-[11px] text-[#82908d]">Select a patient to open their discharge command center.</p>
+              <p className="mt-0.5 text-[11px] text-[#82908d]">Select a patient to open their discharge command centre.</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative">

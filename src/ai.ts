@@ -1,5 +1,5 @@
 import type AnthropicType from "@anthropic-ai/sdk"
-import type { Patient, Task, Urgency } from "./data"
+import { agKeys, agLabels, type Assessment, type Patient, type Task, type Urgency } from "./data"
 import { readiness } from "./logic"
 import { summarizeLocally } from "./summarize"
 
@@ -16,6 +16,7 @@ export const defaultAiSettings: AiSettings = { mode: "rules", apiKey: "", proxyU
 
 export const owners = [
   "Dr. Chen",
+  "JMO",
   "Nursing",
   "Case Management",
   "Social Work",
@@ -33,7 +34,10 @@ export type TaskDraft = Omit<Task, "id" | "completed"> & { evidence: string }
 
 export type RoundsSummary = {
   engine: "claude" | "rules"
-  summary: string
+  /** Dot points. */
+  summary: string[]
+  /** A–G findings from this round; "" where a letter wasn't discussed. */
+  assessment: Assessment
   findings: string[]
   outlook: string
   newTasks: TaskDraft[]
@@ -53,7 +57,8 @@ const SYSTEM = `You are the discharge-planning assistant on an inpatient hospita
 
 Your job is to turn the round into an accurate update of the discharge checklist:
 
-1. summary: 2-4 sentences in the voice of a concise clinical handoff. Synthesize; never restate or paraphrase the transcript line by line. Anchor it in this patient's context: their diagnosis and hospital day, the planned disposition and target discharge time, and the checklist. Say how the patient is doing clinically, which checklist items moved this round, what still blocks discharge, and the plan. This replaces the summary shown on the patient's dashboard, and the raw transcript is discarded after the round, so the summary is the record of this round.
+1. summary: 3-6 dot points (each a short phrase or sentence, no leading bullet character) forming a concise clinical handoff. Synthesize; never restate or paraphrase the transcript line by line. Anchor it in this patient's context: their diagnosis and hospital day, the planned disposition and target discharge time, and the checklist. Cover how the patient is doing clinically, which checklist items moved this round, what still blocks discharge, and the plan. This replaces the summary shown on the patient's dashboard, and the raw transcript is discarded after the round, so the summary is the record of this round.
+1b. assessment: the round written up as a ward A-G assessment, one short line per letter in clinical shorthand (e.g. "SpO2 94% on 2 L NC, RR 18"): A airway, B breathing, C circulation, D disability (conscious state, neuro, pain), E exposure (temperature, skin, wounds, lines, infection), F fluids (intake, output, diet, fluid balance, renal function, electrolytes), G glucose. Use only what was said or written for this round; leave a letter as an empty string if it wasn't covered. The previous assessment is in the patient context for reference, not to be copied forward.
 2. findings: 3-6 short phrases (2-5 words each) naming the concrete discharge-relevant facts the team discussed, such as "Ambulated 150 ft with PT" or "Insulin teaching pending".
 3. outlook: one short sentence on discharge timing as the team described it.
 4. newTasks: action items the team said need to happen before or for discharge that are not already on the checklist. Only include work that was actually discussed; never invent tasks from general best practice. If an existing open task already covers the item, do not add it again. Write the title as a short imperative (under 8 words) and the detail as one sentence with the specifics that were said (doses, times, names, distances). Pick the owner from the allowed list who would normally do the work. Urgency: High if it blocks discharge today or is a safety issue, Medium if needed before discharge, Low otherwise. effort is a rough time like "15 min". due is a short phrase like "Due today", "Before discharge", "Due by 2:00 PM" or "Due tomorrow". evidence is a short quote or paraphrase from the transcript or notes that supports the task.
@@ -81,9 +86,15 @@ const taskSchema = {
 const schema = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "findings", "outlook", "newTasks", "completed", "urgency"],
+  required: ["summary", "assessment", "findings", "outlook", "newTasks", "completed", "urgency"],
   properties: {
-    summary: { type: "string" },
+    summary: { type: "array", items: { type: "string" } },
+    assessment: {
+      type: "object",
+      additionalProperties: false,
+      required: [...agKeys],
+      properties: Object.fromEntries(agKeys.map((k) => [k, { type: "string", description: agLabels[k] }])),
+    },
     findings: { type: "array", items: { type: "string" } },
     outlook: { type: "string" },
     newTasks: { type: "array", items: taskSchema },
@@ -126,6 +137,8 @@ function patientContext(p: Patient) {
       insurance: p.coverage,
       dischargePlan: p.plan,
       readinessPercent: readiness(p),
+      previousAssessment: p.assessment,
+      previousSummary: p.summary,
       checklist: p.tasks.map((t) => ({
         id: t.id,
         title: t.title,
@@ -210,6 +223,12 @@ function sanitize(s: RoundsSummary, p: Patient): RoundsSummary {
   const done = new Set(completed.map((c) => c.taskId))
   return {
     ...s,
+    // Accept a paragraph too, in case a model returns one: split it into points.
+    summary: (Array.isArray(s.summary) ? s.summary : String(s.summary ?? "").split(/(?<=[.!?])\s+/))
+      .map((x) => x.replace(/^[\s•\-*]+/, "").trim())
+      .filter(Boolean)
+      .slice(0, 6),
+    assessment: Object.fromEntries(agKeys.map((k) => [k, (s.assessment?.[k] ?? "").trim()])) as Assessment,
     findings: s.findings.slice(0, 6),
     completed,
     urgency: s.urgency.filter((u) => open.has(u.taskId) && !done.has(u.taskId) && open.get(u.taskId)!.urgency !== u.urgency),

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { patientColors, staff, type Patient, type Task, type Urgency } from "../data"
+import { emptyAssessment, patientColors, staff, type Patient, type Task, type Urgency } from "../data"
 import { navigate, useStore } from "../store"
 import { RoundsEditor } from "./RoundsEditor"
 import { Avatar, Icon, Modal, inputCls, labelCls, primaryBtn } from "../ui"
@@ -90,6 +90,7 @@ export function CareTeamModal({ patient, onClose }: { patient: Patient; onClose:
 
 const owners = [
   "Dr. Chen",
+  "JMO",
   "Nursing",
   "Case Management",
   "Physical Therapy",
@@ -251,7 +252,8 @@ export function AddPatientModal({ onClose }: { onClose: () => void }) {
       target: form.target || "TBD",
       disposition: form.disposition,
       baseline: 30,
-      summary: "New admission. Add rounds notes and generate a checklist to build the discharge plan.",
+      summary: ["New admission. Capture a ward round to build the summary and discharge plan."],
+      assessment: emptyAssessment(),
       detected: [],
       transcript: "",
       notes: "",

@@ -3,6 +3,7 @@ import { facilities, staff, type Patient } from "../data"
 import { blocker, formatMinutes, openEffort, readiness, sortTasks, status } from "../logic"
 import { navigate, useStore } from "../store"
 import { TaskRow } from "../components/TaskRow"
+import { AssessmentList, SummaryPoints } from "../components/ClinicalSummary"
 import { AddTaskModal, CareTeamModal, GeneratorModal } from "../components/Modals"
 import { Avatar, DropdownMenu, Icon, ProgressRing, StatusBadge } from "../ui"
 
@@ -61,11 +62,11 @@ export function Overview({ patient }: { patient: Patient }) {
       <section className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-[#6e807b]">
-            <a href="#/patients" className="hover:text-[#184f41]">My patients</a>
+            <a href="#/" className="hover:text-[#184f41]">Overview</a>
             <Icon name="chevron" size={12} />
-            <span className="text-[#184f41]">Discharge readiness</span>
+            <span className="text-[#184f41]">My patients · {patient.name}</span>
           </div>
-          <h2 className="text-[27px] font-semibold tracking-[-.04em] text-[#173b33]">Discharge command center</h2>
+          <h2 className="text-[27px] font-semibold tracking-[-.04em] text-[#173b33]">Discharge command centre</h2>
           <p className="mt-1 text-[13px] text-[#70807c]">AI-prioritized actions from rounds, notes, and the care team.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -118,7 +119,7 @@ export function Overview({ patient }: { patient: Patient }) {
                   </button>
                 ))}
                 <a
-                  href="#/patients"
+                  href="#/"
                   onClick={() => setShowPatients(false)}
                   className="mt-1 flex items-center justify-center gap-1.5 rounded-xl border-t border-[#edf1ef] p-2.5 text-[11px] font-semibold text-[#197158] hover:bg-[#f0f5f3]"
                 >
@@ -198,7 +199,7 @@ export function Overview({ patient }: { patient: Patient }) {
                 onClick={() => {
                   dispatch({ type: "dischargePatient", pid: patient.id })
                   notify(`${patient.name} discharged and removed from your list`)
-                  navigate("/patients")
+                  navigate("/")
                 }}
                 className="mt-4 flex items-center gap-1.5 text-[11px] font-semibold text-[#176b54]"
               >
@@ -365,21 +366,11 @@ export function Overview({ patient }: { patient: Patient }) {
                 {patient.roundedAt ? `Rounds ${patient.roundedAt}` : "Not rounded"}
               </span>
             </div>
-            <p className="mt-4 text-[12px] leading-[1.7] text-[#526a64]">{patient.summary}</p>
-            {patient.detected.length > 0 && (
-              <>
-                <div className="my-4 border-t border-[#dfe9e5]" />
-                <p className="text-[10px] font-semibold uppercase tracking-[.09em] text-[#85938f]">Detected in rounds</p>
-                <ul className="mt-3 space-y-2.5">
-                  {patient.detected.map((item) => (
-                    <li key={item} className="flex gap-2 text-[11px] leading-snug text-[#506761]">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#48a98c]" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <SummaryPoints points={patient.summary} className="mt-4" />
+            {patient.outlook && <p className="mt-3 text-[10px] font-semibold text-[#2f6b5a]">{patient.outlook}</p>}
+            <div className="my-4 border-t border-[#dfe9e5]" />
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[.09em] text-[#85938f]">A–G assessment</p>
+            <AssessmentList assessment={patient.assessment} compact />
             <a
               href={`#/rounds/${patient.id}`}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-[#cfe1db] bg-white py-2.5 text-[11px] font-semibold text-[#176b54] hover:bg-[#edf6f2]"

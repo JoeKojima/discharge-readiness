@@ -5,7 +5,7 @@ export type IconName =
   | "chevron" | "clock" | "close" | "document" | "dollar" | "home" | "logout"
   | "menu" | "message" | "more" | "patients" | "plus" | "search" | "settings"
   | "shield" | "sparkles" | "stethoscope" | "user" | "trash" | "send" | "login"
-  | "flag" | "refresh" | "mic" | "stop"
+  | "flag" | "refresh" | "mic" | "stop" | "bolt"
 
 const paths: Record<IconName, ReactNode> = {
   activity: (
@@ -41,6 +41,7 @@ const paths: Record<IconName, ReactNode> = {
     </>
   ),
   check: <path d="m5 12 4 4L19 6" />,
+  bolt: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   clock: (
     <>

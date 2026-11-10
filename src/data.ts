@@ -1,5 +1,7 @@
 export type Urgency = "High" | "Medium" | "Low"
 
+export type AutomationLog = { time: string; text: string }
+
 export type Task = {
   id: string
   title: string
@@ -10,6 +12,17 @@ export type Task = {
   effort: string
   completed: boolean
   category: string
+  /** Due label before completion, restored if the task is reopened. */
+  openDue?: string
+  /** Set while a playbook is handling this task. */
+  automation?: {
+    playbook: string
+    state: "waiting" | "done" | "escalated"
+    /** ISO time after which a waiting step escalates on its own. */
+    deadline: string
+    log: AutomationLog[]
+    escalatedFrom?: string
+  }
 }
 
 export type Barrier = {
@@ -18,6 +31,21 @@ export type Barrier = {
   detail: string
   icon: "alert" | "bed" | "document"
 }
+
+/** A–G ward assessment: Airway, Breathing, Circulation, Disability, Exposure, Fluids, Glucose. */
+export type AGKey = "A" | "B" | "C" | "D" | "E" | "F" | "G"
+export type Assessment = Record<AGKey, string>
+export const agLabels: Record<AGKey, string> = {
+  A: "Airway",
+  B: "Breathing",
+  C: "Circulation",
+  D: "Disability",
+  E: "Exposure",
+  F: "Fluids",
+  G: "Glucose",
+}
+export const agKeys = Object.keys(agLabels) as AGKey[]
+export const emptyAssessment = (): Assessment => ({ A: "", B: "", C: "", D: "", E: "", F: "", G: "" })
 
 export type Patient = {
   id: string
@@ -33,7 +61,10 @@ export type Patient = {
   target: string
   disposition: string
   baseline: number
-  summary: string
+  /** Clinical summary as dot points. */
+  summary: string[]
+  /** Latest A–G assessment from rounds. */
+  assessment: Assessment
   detected: string[]
   transcript: string
   notes: string
@@ -110,8 +141,21 @@ export const seedPatients: Patient[] = [
     target: "3:00 PM",
     disposition: "Home with oxygen",
     baseline: 58,
-    summary:
-      "Patient is clinically improved on 2L oxygen and eager to return home. Discharge depends on durable medical equipment confirmation and safe ambulation.",
+    summary: [
+      "COPD exacerbation, hospital day 3 — clinically improved and keen to go home",
+      "Stable on 2 L nasal cannula (SpO₂ 93%), no new dyspnoea overnight",
+      "Blocking discharge: home oxygen delivery and PT ambulation clearance",
+      "Plan: home with daughter after 3 PM; pulmonology review in 7–10 days",
+    ],
+    assessment: {
+      A: "Patent, speaking full sentences",
+      B: "SpO₂ 93% on 2 L NC, RR 18, mild expiratory wheeze",
+      C: "HR 84, BP 132/78, warm and well perfused",
+      D: "Alert and oriented, mobilising with supervision",
+      E: "Afebrile, no peripheral oedema",
+      F: "Eating and drinking well, euvolaemic",
+      G: "BSL 6–9 on prednisolone",
+    },
     detected: [
       "Daughter can provide transport after 3 PM",
       "No new dyspnea overnight",
@@ -156,8 +200,21 @@ export const seedPatients: Patient[] = [
     target: "11:00 AM",
     disposition: "Home",
     baseline: 70,
-    summary:
-      "Uncomplicated post-op course. Tolerating a regular diet with pain controlled on oral medication. Ready once wound-care teaching is done.",
+    summary: [
+      "Laparoscopic cholecystectomy, POD 1 — uncomplicated post-op course",
+      "Pain 2/10 on oral analgesia, tolerating a regular diet",
+      "Remaining: wound-care and showering teaching, surgical clinic booking",
+      "Plan: home with husband at 11 AM",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 98% RA, RR 14",
+      C: "HR 76, BP 124/70",
+      D: "Alert, pain 2/10 on oral analgesia",
+      E: "Afebrile, port sites clean, dry and intact",
+      F: "Tolerating regular diet, voiding",
+      G: "Not diabetic, BSL not monitored",
+    },
     detected: [
       "Husband will drive her home",
       "Pain 2/10 on oral acetaminophen",
@@ -200,8 +257,21 @@ export const seedPatients: Patient[] = [
     target: "Tomorrow 12:00 PM",
     disposition: "Skilled nursing facility",
     baseline: 25,
-    summary:
-      "Euvolemic on oral diuretics and delirium has cleared. Needs skilled nursing placement; admission depends on restraint-free documentation and bariatric equipment.",
+    summary: [
+      "HFrEF exacerbation, hospital day 6 — now euvolaemic on oral furosemide",
+      "Delirium resolved; restraints off 18 h (SNF needs 24 h restraint-free)",
+      "Blocking discharge: prior authorisation, bariatric bed and lift, formulary check",
+      "Plan: SNF transfer tomorrow 12 PM",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 95% RA, bibasal crackles improving",
+      C: "HR 78, BP 118/72, net negative 3.2 L this admission",
+      D: "Calm and oriented, delirium resolved, restraints off 18 h",
+      E: "Afebrile, pressure areas intact",
+      F: "Euvolaemic on PO furosemide, creatinine stable",
+      G: "BSL within range",
+    },
     detected: [
       "Soft restraints discontinued 18 hours ago",
       "Family prefers a facility within 5 miles",
@@ -254,8 +324,21 @@ export const seedPatients: Patient[] = [
     target: "10:30 AM",
     disposition: "Home",
     baseline: 64,
-    summary:
-      "Afebrile for 48 hours on room air and transitioned to oral antibiotics. Only the discharge prescription is outstanding.",
+    summary: [
+      "Community-acquired pneumonia, hospital day 4 — improving",
+      "Afebrile 48 h on room air; switched to oral amoxicillin-clavulanate",
+      "Remaining: send the discharge prescription",
+      "Plan: home at 10:30 AM, son picking her up",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 96% RA, RR 16, clear on auscultation",
+      C: "HR 82, BP 128/76",
+      D: "Alert and oriented",
+      E: "Afebrile 48 h",
+      F: "Eating and drinking well",
+      G: "Not diabetic, BSL not monitored",
+    },
     detected: [
       "Afebrile for 48 hours",
       "Ambulating independently on room air",
@@ -297,8 +380,21 @@ export const seedPatients: Patient[] = [
     target: "4:00 PM",
     disposition: "Home",
     baseline: 40,
-    summary:
-      "Anion gap closed and transitioned to subcutaneous insulin. Discharge depends on insulin teaching, pen coverage, and an endocrinology follow-up.",
+    summary: [
+      "DKA resolved, hospital day 3 — anion gap closed, on subcut basal-bolus insulin",
+      "Ran out of insulin because of cost; pen coverage being checked",
+      "Blocking discharge: insulin teach-back, pen coverage, scripts, endocrinology follow-up",
+      "Plan: home at 4 PM",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 99% RA, RR 14",
+      C: "HR 88, BP 126/80",
+      D: "Alert and oriented",
+      E: "Afebrile",
+      F: "Eating normally, IV fluids ceased",
+      G: "Gap closed; glargine 24 units nightly + lispro sliding scale, BSL 8–12, A1c 11.2%",
+    },
     detected: [
       "New basal-bolus insulin regimen",
       "Lives alone; works night shifts",
@@ -343,8 +439,21 @@ export const seedPatients: Patient[] = [
     target: "1:00 PM",
     disposition: "Home",
     baseline: 60,
-    summary:
-      "Erythema is receding within the marked borders on oral cephalexin. Afebrile, ambulating independently.",
+    summary: [
+      "Left lower leg cellulitis, hospital day 2 — improving on oral cephalexin",
+      "Erythema well inside the marked borders; afebrile, WBC normalised",
+      "Remaining: discharge prescription and wound check in clinic in 48 h",
+      "Plan: home at 1 PM",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 99% RA",
+      C: "HR 72, BP 118/70",
+      D: "Alert, mobilising independently",
+      E: "Afebrile, erythema receding inside marked borders",
+      F: "Eating and drinking well",
+      G: "Not diabetic, BSL not monitored",
+    },
     detected: [
       "Erythema receding inside the marked border",
       "Afebrile overnight",
@@ -387,8 +496,21 @@ export const seedPatients: Patient[] = [
     target: "Friday 10:00 AM",
     disposition: "Inpatient rehab",
     baseline: 20,
-    summary:
-      "Post-op day 2 after right hip ORIF. Pain is controlled, but mobility is limited and he needs a rehab bed. Hemoglobin is being trended after a post-op drop.",
+    summary: [
+      "Right hip fracture, POD 2 after ORIF — pain controlled",
+      "Hb 8.9 from 10.4, asymptomatic; repeat Hb this afternoon",
+      "Lives alone with stairs, walked 20 ft with walker; needs inpatient rehab",
+      "Blocking discharge: rehab referrals, prior authorisation, repeat Hb",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 95% RA",
+      C: "HR 92, BP 110/64, Hb 8.9 (from 10.4), asymptomatic",
+      D: "Alert, pain controlled, WBAT with walker",
+      E: "Afebrile, wound clean and dry",
+      F: "Tolerating diet, voiding",
+      G: "Not diabetic, BSL not monitored",
+    },
     detected: [
       "Walked 20 ft with a walker and two-person assist",
       "Lives alone in a two-story home",
@@ -433,8 +555,21 @@ export const seedPatients: Patient[] = [
     target: "Tomorrow 9:00 AM",
     disposition: "Home with home health",
     baseline: 30,
-    summary:
-      "Sepsis has resolved and blood cultures are clear. A PICC is planned to finish IV ertapenem at home with home health nursing.",
+    summary: [
+      "ESBL E. coli pyelonephritis, hospital day 5 — sepsis resolved",
+      "Afebrile, blood cultures negative",
+      "Blocking discharge: PICC placement, home health and home infusion setup",
+      "Plan: home tomorrow 9 AM on IV ertapenem to complete 10 days",
+    ],
+    assessment: {
+      A: "Patent",
+      B: "SpO₂ 97% RA",
+      C: "HR 80, BP 122/74, sepsis resolved",
+      D: "Alert and oriented",
+      E: "Afebrile, blood cultures negative",
+      F: "Eating and drinking, renal function normal",
+      G: "Not diabetic, BSL not monitored",
+    },
     detected: [
       "Blood cultures negative × 48 hours",
       "Needs 7 more days of IV ertapenem",

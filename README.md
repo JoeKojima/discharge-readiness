@@ -1,6 +1,6 @@
 # ClearPath — Discharge Readiness Checklist Generator
 
-A discharge command center that turns rounds transcripts and clinical notes into a prioritized discharge-readiness checklist. Built with React, Vite and Tailwind CSS v4. It is a static site with no backend, so it runs as-is on GitHub Pages.
+A discharge command centre that turns rounds transcripts and clinical notes into a prioritized discharge-readiness checklist. Built with React, Vite and Tailwind CSS v4. It is a static site with no backend, so it runs as-is on GitHub Pages.
 
 > Demo data only. All patients, facilities and costs are fictional.
 
@@ -29,9 +29,9 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 
 | Page | Route | What it does |
 | --- | --- | --- |
-| Overview | `#/patients/<id>` | Discharge command center for one patient: readiness ring, primary blocker, checklist, AI summary, discharge plan, care team, and SNF facility comparison for patients going to a facility. |
-| My patients | `#/patients` | Dashboard of all patients with unit stats, search, status filters, sorting, and **Add patient**. |
-| Tasks | `#/tasks` | Every task across patients, with filters for patient, owner, urgency and status, plus **Add task**. |
+| Overview | `#/` | Patient dashboard: every patient with unit stats, search, status filters, sorting, and **Add patient**. |
+| My patients | `#/patients/<id>` | Discharge command centre for one patient: readiness ring, primary blocker, checklist, AI clinical summary (dot points + A–G assessment), discharge plan, care team, and SNF facility comparison for patients going to a facility. |
+| Tasks | `#/tasks` | Unit task board in due-time order (Overdue, Due in the next hour, Later today, Tomorrow and later), groupable by patient or role, with Open / JMO list / Automations / Completed views and task automations. |
 | Rounds | `#/rounds/<id>` | Rounding list plus ambient capture: record the round, summarize it with AI, review and apply checklist updates. |
 | Messages | `#/messages` | Care team inbox with threads tied to patients. Sending a message gets a simulated reply. |
 | Settings | `#/settings` | Profile, preference toggles, **AI rounds summarizer** connection, and **Reset demo data**. |
@@ -45,6 +45,8 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
     - **My Anthropic API key**: calls Claude (`claude-opus-5-5`) straight from the browser. The key is stored only in that browser.
     - **Team proxy**: calls Claude through a small Cloudflare Worker that holds the key, so the shared site never contains it. Setup is in [`proxy/README.md`](proxy/README.md).
   - **Demo only:** don't record real patient information. When on-device recognition isn't available, browser speech recognition may send audio to Google or Apple, and none of this is set up for HIPAA.
+- **A–G rounds note:** each round is written up as Airway, Breathing, Circulation, Disability, Exposure, Fluids and Glucose alongside the dot-point summary. On the review screen each letter is editable; letters not covered in the round keep their previous finding.
+- **Task automations** (Tasks page, ⚡ **Automate**): a playbook runs the routine steps of a task and waits on the step that needs a person, with a fallback if it doesn't happen. For example, a repeat Hb is ordered on a pathology request and the phlebotomist is paged; if they can't collect (or there's no response within an hour), the task moves to the **JMO list** as high priority. Playbooks also cover discharge scripts (pharmacist verification), follow-up bookings, equipment delivery, coverage checks, and referrals and authorisations. **These are simulated in the demo:** nothing is sent to pathology, paging, pharmacy or booking systems.
 - Checking off, re-prioritizing (task ⋯ menu), deleting, and adding tasks updates readiness, status, open effort, the primary blocker, and the unit dashboard.
 - Readiness = baseline + remaining share × fraction of tasks complete. Status is derived from readiness and open high-priority tasks.
 - When every task is done, **Discharge patient** removes the patient from the list.
@@ -54,7 +56,9 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 ## Code layout
 
 - `src/data.ts`: seed patients, staff, message threads, facilities
-- `src/logic.ts`: readiness and status math, checklist extraction rules
+- `src/logic.ts`: readiness and status math, checklist extraction rules, due-time parsing
+- `src/summarize.ts`: built-in rounds summarizer (dot points, A–G, checklist changes)
+- `src/automation.ts`: task automation playbooks
 - `src/ambient.ts`: live mic transcription (Web Speech API, on-device first)
 - `src/ai.ts`: Claude rounds summarizer (prompt, JSON schema, rule-based fallback)
 - `src/store.tsx`: app state (reducer and localStorage) and hash router

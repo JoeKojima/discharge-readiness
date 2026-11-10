@@ -8,14 +8,17 @@ import {
   type ReactNode,
 } from "react"
 import {
+  agKeys,
   seedPatients,
+  type Assessment,
   seedThreads,
   type Patient,
   type Task,
   type Thread,
   type Urgency,
 } from "./data"
-import { nowTime } from "./logic"
+import { clockTime, nowTime } from "./logic"
+import { playbooks } from "./automation"
 import { defaultAiSettings, type AiSettings, type RoundsSummary } from "./ai"
 
 export type Settings = {
@@ -35,7 +38,8 @@ export type State = {
   ai: AiSettings
 }
 
-const VERSION = 2
+// 3: summary became dot points and patients gained an A–G assessment.
+const VERSION = 3
 const KEY = "clearpath-state"
 
 export const initialState = (): State => ({
@@ -56,6 +60,8 @@ export const initialState = (): State => ({
 type Action =
   | { type: "select"; id: string }
   | { type: "toggleTask"; pid: string; tid: string }
+  | { type: "automationStart"; pid: string; tid: string }
+  | { type: "automationResolve"; pid: string; tid: string; outcome: "success" | "fallback"; timedOut?: boolean }
   | { type: "setUrgency"; pid: string; tid: string; urgency: Urgency }
   | { type: "deleteTask"; pid: string; tid: string }
   | { type: "addTasks"; pid: string; tasks: Task[] }
@@ -94,8 +100,62 @@ function reducer(state: State, action: Action): State {
       return mapTask(state, action.pid, action.tid, (t) => ({
         ...t,
         completed: !t.completed,
-        due: t.completed ? "Due today" : `Completed ${nowTime()}`,
+        due: t.completed ? (t.openDue ?? "Due today") : `Completed ${nowTime()}`,
+        openDue: t.completed ? undefined : t.due,
       }))
+    case "automationStart": {
+      return mapTask(state, action.pid, action.tid, (t) => {
+        const pb = playbooks.find((p) => p.match.test(t.title))
+        if (!pb || t.completed) return t
+        const time = nowTime()
+        return {
+          ...t,
+          automation: {
+            playbook: pb.id,
+            state: "waiting",
+            deadline: new Date(Date.now() + pb.timeoutMin * 60_000).toISOString(),
+            log: [...pb.steps(t).map((text) => ({ time, text })), { time, text: pb.waitFor }],
+          },
+        }
+      })
+    }
+    case "automationResolve": {
+      return mapTask(state, action.pid, action.tid, (t) => {
+        const run = t.automation
+        const pb = playbooks.find((p) => p.id === run?.playbook)
+        if (!run || !pb || run.state !== "waiting") return t
+        const time = nowTime()
+        if (action.outcome === "success")
+          return {
+            ...t,
+            completed: true,
+            openDue: t.due,
+            due: `Completed ${time}`,
+            automation: { ...run, state: "done", log: [...run.log, { time, text: pb.successLog }] },
+          }
+        const soon = new Date(Date.now() + 30 * 60_000)
+        return {
+          ...t,
+          owner: pb.escalateTo,
+          urgency: "High",
+          due: `Due by ${clockTime(soon)}`,
+          automation: {
+            ...run,
+            state: "escalated",
+            escalatedFrom: t.owner,
+            log: [
+              ...run.log,
+              {
+                time,
+                text: action.timedOut
+                  ? `No response in ${pb.timeoutMin} min, so the task was handed to ${pb.escalateTo === "JMO" ? "the JMO task list" : pb.escalateTo}`
+                  : pb.escalateLog,
+              },
+            ],
+          },
+        }
+      })
+    }
     case "setUrgency":
       return mapTask(state, action.pid, action.tid, (t) => ({ ...t, urgency: action.urgency }))
     case "deleteTask":
@@ -140,6 +200,10 @@ function reducer(state: State, action: Action): State {
         ...p,
         // The summary is the record of the round; the raw transcript isn't kept.
         summary: action.summary.summary,
+        // Letters not covered this round keep their previous finding.
+        assessment: Object.fromEntries(
+          agKeys.map((k) => [k, action.summary.assessment[k].trim() || p.assessment[k]]),
+        ) as Assessment,
         detected: action.summary.findings.length ? action.summary.findings : p.detected,
         outlook: action.summary.outlook,
         transcript: "",
@@ -204,7 +268,10 @@ function load(): State {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as State
-      if (parsed.version === VERSION) return { ...parsed, ai: { ...defaultAiSettings, ...parsed.ai } }
+      const ai = { ...defaultAiSettings, ...parsed.ai }
+      if (parsed.version === VERSION) return { ...parsed, ai }
+      // Older saved data uses a different shape: start from fresh demo data but keep the AI connection.
+      return { ...initialState(), ai }
     }
   } catch {
     // storage unavailable or corrupt: fall back to seed data

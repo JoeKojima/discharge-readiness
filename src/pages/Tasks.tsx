@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 import type { Patient, Task } from "../data"
-import { clockTime, dueAt, dueBucket, dueBuckets, formatMinutes, parseMinutes, relativeDue, urgencyRank, type DueBucket } from "../logic"
+import { clockTime, contributions, pct, dueAt, dueBucket, dueBuckets, formatMinutes, parseMinutes, relativeDue, urgencyRank, type DueBucket } from "../logic"
 import { playbookFor } from "../automation"
 import { useStore } from "../store"
 import { AddTaskModal } from "../components/Modals"
+import { ContributionWhy } from "../components/TaskRow"
 import { Avatar, DropdownMenu, Icon, PageHeader, card, primaryBtn } from "../ui"
 
 type View = "Open" | "JMO list" | "Automations" | "Completed"
@@ -253,6 +254,7 @@ function BoardRow({ row, now, expanded, onToggle }: { row: Row; now: Date; expan
   const pid = patient.id
   const run = task.automation
   const pb = playbookFor(task)
+  const share = contributions(patient).find((c) => c.task.id === task.id)
   const overdue = !task.completed && at && at < now
   const dot = task.urgency === "High" ? "bg-[#d75544]" : task.urgency === "Medium" ? "bg-[#d9a24a]" : "bg-[#9fb3ad]"
 
@@ -296,6 +298,12 @@ function BoardRow({ row, now, expanded, onToggle }: { row: Row; now: Date; expan
             </a>
             <span className={task.owner === "JMO" ? "rounded bg-[#fff0d7] px-1.5 py-0.5 font-semibold text-[#936018]" : ""}>{task.owner}</span>
             <span>{task.effort}</span>
+            {share && (
+              <span className="font-semibold text-[#176b54]" title={share.reasons.map((r) => `+${r.points} ${r.label}`).join("\n")}>
+                {task.completed ? "+" : ""}
+                {pct(share.percent)} readiness
+              </span>
+            )}
             {run && <AutomationPill run={run} />}
           </div>
         </div>
@@ -361,6 +369,7 @@ function BoardRow({ row, now, expanded, onToggle }: { row: Row; now: Date; expan
           <p className="text-[10px] text-[#8a9894]">
             {task.urgency} urgency · {task.category} · {task.completed ? task.due : `Due label: ${task.due}`}
           </p>
+          <ContributionWhy patient={patient} task={task} />
           {run ? (
             <ol className="space-y-1.5 rounded-xl border border-[#e2e9e6] bg-[#fafcfb] p-3" aria-label="Automation log">
               {run.log.map((l, i) => {

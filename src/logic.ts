@@ -124,11 +124,55 @@ export function sortTasks(tasks: Task[]) {
   )
 }
 
+// ---- Readiness ---------------------------------------------------------------
+//
+// Readiness = baseline + the share of the remaining (100 − baseline) points
+// that completed tasks have earned. Tasks don't earn equal shares: each has a
+// weight from what it means for discharge, and its share is its weight divided
+// by the total weight of the patient's checklist.
+
+const urgencyPoints: Record<Urgency, { points: number; why: string }> = {
+  High: { points: 3, why: "High urgency: blocks discharge or is a safety issue" },
+  Medium: { points: 2, why: "Medium urgency: needed before discharge" },
+  Low: { points: 1, why: "Low urgency: can be done any time before discharge" },
+}
+/** Tasks at or above this many minutes count as a larger piece of the remaining work. */
+export const LONG_TASK_MIN = 30
+
+export type Contribution = {
+  task: Task
+  /** Weight points for this task. */
+  points: number
+  /** Readiness percentage points this task adds when completed. */
+  percent: number
+  /** Why it gets these points, one line per factor. */
+  reasons: { label: string; points: number }[]
+}
+
+export function taskWeight(task: Task) {
+  const u = urgencyPoints[task.urgency]
+  const reasons = [{ label: u.why, points: u.points }]
+  if (parseMinutes(task.effort) >= LONG_TASK_MIN)
+    reasons.push({ label: `${task.effort} of work (${LONG_TASK_MIN}+ min tasks are a bigger share of what's left)`, points: 1 })
+  return { points: reasons.reduce((n, r) => n + r.points, 0), reasons }
+}
+
+/** Each task's share of the readiness gap, with the reasons behind it. */
+export function contributions(p: Patient): Contribution[] {
+  const weights = p.tasks.map((task) => ({ task, ...taskWeight(task) }))
+  const total = weights.reduce((n, w) => n + w.points, 0)
+  return weights.map((w) => ({ ...w, percent: total ? ((100 - p.baseline) * w.points) / total : 0 }))
+}
+
 export function readiness(p: Patient) {
-  const total = p.tasks.length
-  if (!total) return p.baseline
-  const done = p.tasks.filter((t) => t.completed).length
-  return Math.round(p.baseline + ((100 - p.baseline) * done) / total)
+  if (!p.tasks.length) return p.baseline
+  const earned = contributions(p).reduce((n, c) => n + (c.task.completed ? c.percent : 0), 0)
+  return Math.round(p.baseline + earned)
+}
+
+/** Whole-number label for a contribution, never showing "+0%". */
+export function pct(n: number) {
+  return n > 0 && n < 1 ? "<1%" : `${Math.round(n)}%`
 }
 
 export type Status = "Ready for discharge" | "Likely discharge today" | "Likely tomorrow" | "Not ready"

@@ -1,4 +1,6 @@
+import { useState } from "react"
 import type { Patient, Task } from "../data"
+import { contributions, formatMinutes, openEffort, parseMinutes, pct } from "../logic"
 import { useStore } from "../store"
 import { Avatar, DropdownMenu, Icon, UrgencyBadge } from "../ui"
 
@@ -14,7 +16,9 @@ export function TaskRow({
   highlight?: boolean
 }) {
   const { dispatch, notify } = useStore()
+  const [why, setWhy] = useState(false)
   const pid = patient.id
+  const share = contributions(patient).find((c) => c.task.id === task.id)
   return (
     <div
       id={`task-${task.id}`}
@@ -100,6 +104,15 @@ export function TaskRow({
             {task.effort} effort
           </span>
           <span className="rounded bg-[#f1f4f3] px-1.5 py-0.5">{task.category}</span>
+          {share && (
+            <button
+              onClick={() => setWhy((v) => !v)}
+              aria-expanded={why}
+              className="rounded bg-[#e8f3ef] px-1.5 py-0.5 font-semibold text-[#176b54] hover:bg-[#dcefe8]"
+            >
+              {task.completed ? "Added" : "Adds"} {pct(share.percent)} readiness · why?
+            </button>
+          )}
           {task.automation && (
             <a href="#/tasks" className="flex items-center gap-1 rounded bg-[#e2f1ec] px-1.5 py-0.5 font-semibold text-[#176b54] hover:underline">
               <Icon name="bolt" size={10} />
@@ -111,7 +124,41 @@ export function TaskRow({
             </a>
           )}
         </div>
+        {why && share && <ContributionWhy patient={patient} task={task} />}
       </div>
+    </div>
+  )
+}
+
+/** Why a task adds what it adds to readiness, and its share of the open workload. */
+export function ContributionWhy({ patient, task }: { patient: Patient; task: Task }) {
+  const all = contributions(patient)
+  const c = all.find((x) => x.task.id === task.id)
+  if (!c) return null
+  const totalPoints = all.reduce((n, x) => n + x.points, 0)
+  const gap = 100 - patient.baseline
+  const open = openEffort(patient)
+  const mins = parseMinutes(task.effort)
+  return (
+    <div className="mt-2.5 rounded-lg border border-[#dcebe5] bg-[#f6fbf9] px-3 py-2.5 text-[10px] leading-relaxed text-[#4f6862]">
+      <p className="font-semibold text-[#29463f]">
+        {task.completed ? "Added" : "Adds"} {pct(c.percent)} to {patient.name}'s readiness
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {c.reasons.map((r) => (
+          <li key={r.label}>
+            +{r.points} pt{r.points === 1 ? "" : "s"} · {r.label}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-[#6c807a]">
+        {c.points} of {totalPoints} checklist points × the {gap}% between baseline ({patient.baseline}%) and ready = {pct(c.percent)}.
+      </p>
+      {!task.completed && open > 0 && (
+        <p className="mt-1 text-[#6c807a]">
+          Workload: {task.effort}, {pct((mins / open) * 100)} of {patient.name.split(" ")[0]}'s {formatMinutes(open)} of open work.
+        </p>
+      )}
     </div>
   )
 }

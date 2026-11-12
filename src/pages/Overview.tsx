@@ -4,6 +4,7 @@ import { blocker, formatMinutes, openEffort, readiness, sortTasks, status } from
 import { navigate, useStore } from "../store"
 import { TaskRow } from "../components/TaskRow"
 import { AssessmentList, SummaryPoints } from "../components/ClinicalSummary"
+import { ReadinessBreakdown } from "../components/ReadinessBreakdown"
 import { AddTaskModal, CareTeamModal, GeneratorModal } from "../components/Modals"
 import { Avatar, DropdownMenu, Icon, ProgressRing, StatusBadge } from "../ui"
 
@@ -15,6 +16,7 @@ export function Overview({ patient }: { patient: Patient }) {
   const [modal, setModal] = useState<null | "generate" | "team" | "task">(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [selectedFacility, setSelectedFacility] = useState(0)
+  const [showWhy, setShowWhy] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -161,6 +163,15 @@ export function Overview({ patient }: { patient: Patient }) {
                   <p className="mt-1 text-[18px] font-semibold text-[#253f39]">{patient.target}</p>
                 </div>
               </div>
+              <button
+                onClick={() => setShowWhy((v) => !v)}
+                aria-expanded={showWhy}
+                aria-controls="readiness-breakdown"
+                className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-[#176b54] hover:underline"
+              >
+                {showWhy ? "Hide breakdown" : `How is ${ready}% calculated?`}
+                <Icon name="chevron" size={12} className={showWhy ? "-rotate-90" : "rotate-90"} />
+              </button>
             </div>
           </div>
           <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#e8f6f1]/70" />
@@ -239,6 +250,12 @@ export function Overview({ patient }: { patient: Patient }) {
           <p className="mt-2 text-[10px] text-[#84938f]">{patient.trendNote}</p>
         </div>
       </section>
+
+      {showWhy && (
+        <div id="readiness-breakdown" className="mb-5">
+          <ReadinessBreakdown patient={patient} />
+        </div>
+      )}
 
       {patient.snf && (
         <section className="mb-5 overflow-hidden rounded-[18px] border border-[#cfe0da] bg-white shadow-[0_2px_8px_rgba(30,65,55,.04)]">

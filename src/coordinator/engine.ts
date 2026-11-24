@@ -18,7 +18,7 @@ import {
 // seeded random generator so a demo plays out the same way every time.
 
 export type Channel = "fax" | "email" | "phone" | "portal" | "text" | "system"
-export type StreamKind = "facility" | "auth" | "dme" | "homehealth" | "infusion" | "transport" | "family"
+export type StreamKind = "facility" | "auth" | "dme" | "homehealth" | "infusion" | "dialysis" | "transport" | "extension" | "family"
 export type Status =
   | "queued"
   | "sent"
@@ -183,6 +183,8 @@ export function startCoordination(patient: { id: string; name: string }, profile
   schedule(c, 7, "family", "family:question")
   if (rand(c, "upset") < 0.6) schedule(c, 26, "family", "family:upset")
 
+  if (profile.needs.includes("Dialysis")) startDialysis(c)
+
   if (isFacilityPath(profile)) {
     c.matches = matchFacilities(profile.destination, profile.needs, profile.coverage).map((m) => ({
       id: m.facility.id,
@@ -278,9 +280,15 @@ function facilityEvent(c: Coordination, ev: Scheduled) {
     case "fac:decision": {
       const r = rand(c, `${f.id}:decision`)
       if (r < f.acceptRate) {
-        log(c, "outside", "phone", `${f.name} accepted: bed available ${day(tomorrowAt(c.now, 11))}`, s.id)
-        set(c, s.id, "accepted", "Accepted · bed offered")
-        if (!c.queue.some((q) => q.type === "fac:deadline")) schedule(c, 24, s.id, "fac:deadline")
+        if (needsDocToDoc(c, s.id)) {
+          const slot = workingHoursSlot(c.now + 2 * HOUR)
+          log(c, "outside", "phone", `${f.name}'s medical director wants a doctor-to-doctor call about medical stability before accepting`, s.id)
+          log(c, "agent", "phone", `Booked a doc-to-doc call between Dr. Chen and ${f.name}'s medical director for ${when(slot)}; sent both a calendar invite and paged Dr. Chen`, s.id)
+          set(c, s.id, "info-requested", `Doc-to-doc call booked ${time(slot)}`)
+          schedule(c, (slot - c.now) / HOUR + 0.5, s.id, "fac:doc2doc")
+          break
+        }
+        acceptFacility(c, s, f)
       } else {
         const reason = r < f.acceptRate + (1 - f.acceptRate) / 2 ? "no bed until next week" : "can't meet the care needs with current staffing"
         log(c, "outside", "fax", `${f.name} declined: ${reason}`, s.id)
@@ -290,10 +298,35 @@ function facilityEvent(c: Coordination, ev: Scheduled) {
       tryConfirm(c, false)
       break
     }
+    case "fac:doc2doc":
+      log(c, "staff", "phone", `Dr. Chen spoke with ${f.name}'s medical director: agreed the patient is medically stable for transfer`, s.id)
+      acceptFacility(c, s, f)
+      tryConfirm(c, false)
+      break
     case "fac:deadline":
       tryConfirm(c, true)
       break
   }
+}
+
+/** The next time between 8 AM and 5 PM, for calls between physicians. */
+function workingHoursSlot(ms: number) {
+  const d = new Date(ms)
+  if (d.getHours() >= 17) d.setDate(d.getDate() + 1)
+  if (d.getHours() >= 17 || d.getHours() < 8) d.setHours(9, 0, 0, 0)
+  return d.getTime()
+}
+
+/** Acute rehab and LTCH want a doctor-to-doctor call on medical stability before accepting (#15). */
+function needsDocToDoc(c: Coordination, streamId: string) {
+  if (!["Acute rehab", "LTCH"].includes(c.profile.destination)) return false
+  return !c.log.some((l) => l.streamId === streamId && l.text.startsWith("Booked a doc-to-doc call"))
+}
+
+function acceptFacility(c: Coordination, s: Stream, f: Facility) {
+  log(c, "outside", "phone", `${f.name} accepted: bed available ${day(tomorrowAt(c.now, 11))}`, s.id)
+  set(c, s.id, "accepted", "Accepted · bed offered")
+  if (!c.queue.some((q) => q.type === "fac:deadline")) schedule(c, 24, s.id, "fac:deadline")
 }
 
 /** After a denial, contact the next ranked facility nobody has tried yet. */
@@ -421,6 +454,78 @@ function approveAuth(c: Coordination, onAppeal = false) {
   set(c, "auth", "approved", onAppeal ? "Approved on appeal" : "Approved")
   notifyFamily(c, `Insurance approved ${firstName(c)}'s ${c.profile.destination === "Home with services" ? "home services" : "stay"}.`)
   startTransport(c)
+  startExtension(c)
+}
+
+// ---- Weekly continued-stay (extension) requests (#20) ------------------------------------
+
+/** Facility stays approved for a week at a time: line up the first extension request. */
+function startExtension(c: Coordination) {
+  if (!isFacilityPath(c.profile) || !c.admission || c.streams.some((s) => s.kind === "extension")) return
+  const due = c.admission.at + 6 * 24 * HOUR
+  addStream(c, { id: "extension", kind: "extension", label: "Weekly extension request", party: `${payerFamily(c.profile.coverage)} via ${c.admission.party}`, channel: "portal" })
+  set(c, "extension", "queued", `Approved for 7 days · first review due ${when(due)}`)
+  log(c, "agent", "system", `${payerFamily(c.profile.coverage)} approved 7 days; the first continued-stay review is due ${when(due)}`, "extension")
+  c.queue.push({ at: due - 24 * HOUR, streamId: "extension", type: "ext:progress" })
+}
+
+function extensionEvent(c: Coordination, ev: Scheduled) {
+  const s = stream(c, "extension")
+  const fac = c.admission?.party ?? "the facility"
+  switch (ev.type) {
+    case "ext:progress":
+      log(c, "agent", "email", `Asked ${fac} for this week's PT/OT progress and nursing summary for the extension request`, s.id)
+      set(c, s.id, "sent", "Collecting this week's progress")
+      schedule(c, 4, s.id, "ext:submit")
+      break
+    case "ext:submit":
+      log(c, "outside", "email", `${fac} sent progress: walking 120 ft with a walker (up from 15 ft), transfers down to one-person assist`, s.id)
+      log(c, "agent", "portal", `Drafted the extension request from the progress notes and submitted it on ${payers[payerFamily(c.profile.coverage)].portal}`, s.id)
+      set(c, s.id, "submitted", "Extension submitted with progress report")
+      schedule(c, 18, s.id, "ext:decision")
+      break
+    case "ext:decision": {
+      const next = c.now + 7 * 24 * HOUR
+      log(c, "outside", "portal", `${payerFamily(c.profile.coverage)} approved 7 more days`, s.id)
+      set(c, s.id, "approved", `Extended 7 days · next review ${when(next)}`)
+      break
+    }
+  }
+}
+
+// ---- Outpatient dialysis chair (#24) -------------------------------------------------------
+
+function startDialysis(c: Coordination) {
+  const unit = vendors.find((v) => v.kind === "dialysis")!
+  addStream(c, { id: "dialysis", kind: "dialysis", label: "Outpatient dialysis chair", party: unit.name, channel: "fax" })
+  schedule(c, 0.3, "dialysis", "dial:send")
+}
+
+function dialysisEvent(c: Coordination, ev: Scheduled) {
+  const s = stream(c, "dialysis")
+  switch (ev.type) {
+    case "dial:send":
+      s.attempts = 1
+      log(c, "agent", "fax", `Sent a chair request to ${s.party} near ${c.profile.zip} with the H&P, last 3 treatment sheets and medication list`, s.id)
+      set(c, s.id, "sent", "Chair request sent")
+      schedule(c, 3, s.id, "dial:info")
+      break
+    case "dial:info":
+      log(c, "outside", "phone", `${s.party} needs a hepatitis B panel and PPD result before they can offer a chair`, s.id)
+      log(c, "agent", "fax", `Sent the hepatitis B panel and PPD result from the chart to ${s.party}`, s.id)
+      set(c, s.id, "info-requested", "Sent hepatitis B panel and PPD")
+      schedule(c, 5, s.id, "dial:offer")
+      break
+    case "dial:offer": {
+      const ride = isFacilityPath(c.profile) ? "the facility's van" : "CCT paratransit"
+      log(c, "outside", "phone", `${s.party} offered a chair Mon/Wed/Fri, 11:30 AM shift`, s.id)
+      log(c, "agent", "phone", `Matched the 11:30 AM shift to ${ride} and confirmed the chair; first treatment the day after discharge`, s.id)
+      set(c, s.id, "confirmed", `Chair Mon/Wed/Fri 11:30 AM · ride by ${ride}`)
+      if (!isFacilityPath(c.profile)) homeCheck(c)
+      else readyCheck(c)
+      break
+    }
+  }
 }
 
 export function approveAppeal(c0: Coordination, text: string): Coordination {
@@ -472,7 +577,7 @@ function startHome(c: Coordination) {
     addStream(c, { id: "infusion", kind: "infusion", label: "Home infusion", party: "Optima Home Infusion", channel: "email" })
     schedule(c, 0.3, "infusion", "inf:send")
   }
-  if (!c.profile.dme.length && !c.profile.homeServices.length && !c.profile.needs.includes("IV antibiotics")) {
+  if (!c.profile.dme.length && !c.profile.homeServices.length && !c.profile.needs.includes("IV antibiotics") && !c.profile.needs.includes("Dialysis")) {
     c.admission = { party: "Home", at: tomorrowAt(c.now, 11) }
     startTransport(c)
   }
@@ -567,7 +672,7 @@ function homeEvent(c: Coordination, ev: Scheduled) {
 function homeCheck(c: Coordination) {
   if (c.admission) return
   const pending = c.streams.some(
-    (s) => ["dme", "infusion"].includes(s.kind) && s.status !== "confirmed",
+    (s) => ["dme", "infusion", "dialysis"].includes(s.kind) && s.status !== "confirmed",
   ) || (c.streams.some((s) => s.kind === "homehealth") && !c.streams.some((s) => s.kind === "homehealth" && s.status === "confirmed"))
   if (pending) return
   c.admission = { party: "Home", at: tomorrowAt(c.now, 11) }
@@ -605,7 +710,7 @@ function transportEvent(c: Coordination, ev: Scheduled) {
 function readyCheck(c: Coordination) {
   if (c.ready || !c.admission) return
   const done = c.streams.every((s) =>
-    s.kind === "family" ? true : ["confirmed", "cancelled", "declined", "approved", "not-needed", "booked"].includes(s.status),
+    s.kind === "family" || s.kind === "extension" ? true : ["confirmed", "cancelled", "declined", "approved", "not-needed", "booked"].includes(s.status),
   )
   if (!done) return
   c.ready = true
@@ -705,6 +810,8 @@ export function advance(c0: Coordination, until: number): Coordination {
     else if (prefix === "auth") authEvent(c, ev)
     else if (prefix === "tx") transportEvent(c, ev)
     else if (prefix === "family") familyEvent(c, ev)
+    else if (prefix === "ext") extensionEvent(c, ev)
+    else if (prefix === "dial") dialysisEvent(c, ev)
     else homeEvent(c, ev)
     readyCheck(c)
   }

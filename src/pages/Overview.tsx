@@ -460,7 +460,8 @@ function Tracker({ patient, c, isFacility }: { patient: Patient; c?: Coordinatio
     )
 
   const facilities = c.streams.filter((s) => s.kind === "facility").sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-  const homeStreams = c.streams.filter((s) => ["dme", "homehealth", "infusion"].includes(s.kind))
+  const homeStreams = c.streams.filter((s) => ["dme", "homehealth", "infusion", "dialysis"].includes(s.kind))
+  const dialysis = c.streams.find((s) => s.kind === "dialysis")
   const auth = c.streams.find((s) => s.kind === "auth")
   const ride = c.streams.find((s) => s.kind === "transport")
   const gates = c.gates.filter((g) => !g.resolved)
@@ -469,6 +470,7 @@ function Tracker({ patient, c, isFacility }: { patient: Patient; c?: Coordinatio
         ["Referrals sent", facilities.some((s) => s.status !== "queued")],
         ["Accepted", facilities.some((s) => ["accepted", "confirmed"].includes(s.status))],
         ["Bed confirmed", facilities.some((s) => s.status === "confirmed")],
+        ...(dialysis ? [["Dialysis chair", done(dialysis)] as [string, boolean]] : []),
         ["Insurance", done(auth)],
         ["Ride booked", done(ride)],
         ["Ready", c.ready],
@@ -541,6 +543,7 @@ function Tracker({ patient, c, isFacility }: { patient: Patient; c?: Coordinatio
 function Insurance({ patient, c, destination, isFacility }: { patient: Patient; c?: Coordination; destination: Destination; isFacility: boolean }) {
   const payer = payers[payerFamily(patient.coverage)]
   const auth = c?.streams.find((s) => s.kind === "auth")
+  const extension = c?.streams.find((s) => s.kind === "extension")
   const needed = payer.needsAuth(destination)
   const rows: [string, ReactNode][] = [
     ["Plan", patient.coverage],
@@ -560,6 +563,17 @@ function Insurance({ patient, c, destination, isFacility }: { patient: Patient; 
         <span>Not needed for {destination.toLowerCase()}</span>
       ),
     ],
+    ...(extension
+      ? ([
+          [
+            "Weekly extension",
+            <span className="flex flex-wrap items-center justify-end gap-1.5">
+              <Pill kind={statusTone[extension.status]}>{extension.status.replace("-", " ")}</Pill>
+              <span>{extension.note}</span>
+            </span>,
+          ],
+        ] as [string, ReactNode][])
+      : []),
     ["Where it's submitted", payer.portal],
     ["Typical turnaround", payer.turnaroundHours ? `About ${payer.turnaroundHours} hours` : "No wait"],
   ]

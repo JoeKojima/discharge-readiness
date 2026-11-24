@@ -53,7 +53,10 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
   - verifies the family's number by text, sends them the facility list and collects ranked choices
   - faxes referrals to every chosen facility at once, recovers from failed faxes, calls non-responders on a schedule, sends extra documents on request, auto-advances to the next match after a denial, and confirms the bed with the family's best acceptance
   - adds facility admission rules (e.g. 24 h restraint-free) to the patient's checklist
+  - books a doc-to-doc call in working hours when an acute rehab or LTCH medical director wants to discuss medical stability before accepting
+  - finds an outpatient dialysis chair for patients on dialysis: sends the chair request and the hepatitis B/PPD results the unit asks for, and matches the shift to the ride
   - submits prior auth on the payer portal with deadline tracking (front-loaded before weekends), drafts appeals for a clinician to sign and books the peer-to-peer
+  - after a facility stay is approved, collects the facility's weekly progress and submits the continued-stay (extension) request before each review date
   - for home discharges, orders equipment and moves delivery into the caregiver's window, refers to several home health agencies at once (first to accept wins), and chases the infusion medical-benefit approval
   - books the right ride, and keeps the family updated by text; distress goes to the social worker instead of an automatic reply
   **All outreach is simulated:** outside parties respond from the directory's stats on a simulated clock you control (+1 h, +4 h, next event, play). Nothing is faxed, called, texted or submitted.

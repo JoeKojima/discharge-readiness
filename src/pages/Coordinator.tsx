@@ -133,7 +133,8 @@ function Board({ patient }: { patient: Patient }) {
   const next = nextEventAt(c)
   const facilities = c.streams.filter((s) => s.kind === "facility").sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
   const home = c.streams.filter((s) => ["dme", "homehealth", "infusion"].includes(s.kind))
-  const auth = c.streams.filter((s) => s.kind === "auth")
+  const auth = c.streams.filter((s) => s.kind === "auth" || s.kind === "extension")
+  const dialysis = c.streams.filter((s) => s.kind === "dialysis")
   const ride = c.streams.filter((s) => s.kind === "transport")
   const family = c.streams.filter((s) => s.kind === "family")
   const entries = [...c.log].reverse().filter((l) => !filter || l.streamId === filter)
@@ -208,8 +209,15 @@ function Board({ patient }: { patient: Patient }) {
               ))}
             </Group>
           )}
+          {dialysis.length > 0 && (
+            <Group title="Dialysis" subtitle="Outpatient chair matched to a shift the ride can make.">
+              {dialysis.map((s) => (
+                <StreamCard key={s.id} s={s} active={filter === s.id} onClick={() => setFilter(filter === s.id ? null : s.id)} />
+              ))}
+            </Group>
+          )}
           {auth.length > 0 && (
-            <Group title="Insurance" subtitle="Payer-portal submission with deadline tracking.">
+            <Group title="Insurance" subtitle="Payer-portal submission with deadline tracking, then weekly extension requests.">
               {auth.map((s) => (
                 <StreamCard key={s.id} s={s} active={filter === s.id} onClick={() => setFilter(filter === s.id ? null : s.id)} />
               ))}
@@ -344,7 +352,7 @@ function Matches({ c }: { c: Coordination }) {
 function Readiness({ c }: { c: Coordination }) {
   const facility = c.streams.find((s) => s.kind === "facility" && s.status === "confirmed")
   const isHome = !["SNF", "Acute rehab", "LTCH"].includes(c.profile.destination)
-  const homeDone = c.streams.filter((s) => ["dme", "homehealth", "infusion"].includes(s.kind))
+  const homeDone = c.streams.filter((s) => ["dme", "homehealth", "infusion", "dialysis"].includes(s.kind))
   const auth = c.streams.find((s) => s.kind === "auth")
   const ride = c.streams.find((s) => s.kind === "transport")
   const items: [string, boolean, string][] = [

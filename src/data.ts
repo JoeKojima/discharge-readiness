@@ -123,6 +123,7 @@ export const staff: Staff[] = [
   { id: "KO", initials: "KO", name: "Kara Olsen", role: "Charge nurse", color: "#fde2ef", text: "#7d3b5b", pager: "x4400", online: true },
   { id: "SB", initials: "SB", name: "Sam Becker", role: "Social work", color: "#ffe4d7", text: "#7c4a33", pager: "x4489", online: false },
   { id: "NB", initials: "NB", name: "Nina Brooks", role: "Occupational therapy", color: "#efe4ff", text: "#5b4a86", pager: "x4475", online: true },
+  { id: "AP", initials: "AP", name: "Ava Patel", role: "Speech-language pathology", color: "#e3f4fb", text: "#235f73", pager: "x4478", online: true },
   { id: "BOT", initials: "AI", name: "ClearPath assistant", role: "Discharge reminders", color: "#dcefe8", text: "#176b54", pager: "—", online: true },
 ]
 
@@ -178,7 +179,7 @@ export const seedPatients: Patient[] = [
       "Patient feels much better today. Breathing comfortably on two liters. Daughter confirmed she can pick him up after three, but we are still waiting to hear from the oxygen company. Please have PT walk him once more before lunch. Review the new inhaler with both patient and daughter.",
     notes:
       "COPD exacerbation improving. SpO₂ 93% on 2L NC. Medically stable pending DME and mobility clearance.",
-    careTeam: ["LC", "MR", "TH", "DW"],
+    careTeam: ["LC", "MR", "TH", "DW", "AP"],
     confidence: "Moderate, trending up",
     trend: [5, 7, 6, 9, 11, 13, 15, 18],
     trendNote: "+12% since morning rounds",
@@ -294,7 +295,7 @@ export const seedPatients: Patient[] = [
       "Mr. Brown is calm and oriented today, no restraints overnight. He's net negative and on oral Lasix now. He'll need skilled nursing, so case management should submit the prior auth today. Confirm Harborview has a bariatric bed and lift. Pharmacy to check the apixaban and Entresto are on their formulary.",
     notes:
       "HFrEF exacerbation, now euvolemic on PO furosemide. Delirium resolved; restraints discontinued 18h ago. BMI 41.",
-    careTeam: ["LC", "MR", "SB", "PN", "TH", "NB"],
+    careTeam: ["LC", "MR", "SB", "PN", "TH", "NB", "AP"],
     confidence: "Low, improving",
     trend: [3, 4, 4, 5, 6, 7, 8, 10],
     trendNote: "+6% since morning rounds",

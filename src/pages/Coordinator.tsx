@@ -451,7 +451,7 @@ function GateCard({ c, gateId, onChange }: { c: Coordination; gateId: string; on
 
 // ---- Setup -----------------------------------------------------------------------
 
-const homeServiceOptions = ["Skilled nursing", "Physical therapy", "Occupational therapy", "Home health aide"]
+const homeServiceOptions = ["Skilled nursing", "Physical therapy", "Occupational therapy", "Speech therapy", "Home health aide"]
 
 function Setup({ patient, onStart }: { patient: Patient; onStart: (p: Profile) => void }) {
   const initial = useMemo(() => defaultProfile(patient), [patient])

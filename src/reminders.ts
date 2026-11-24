@@ -29,6 +29,7 @@ const ownerIds: [RegExp, string][] = [
   [/social work/i, "SB"],
   [/physical therapy/i, "TH"],
   [/occupational/i, "NB"],
+  [/speech|swallow/i, "AP"],
   [/pharm/i, "PN"],
   [/respiratory/i, "DW"],
 ]

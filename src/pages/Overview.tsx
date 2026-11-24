@@ -10,6 +10,9 @@ import { EpicPanel } from "../components/EpicPanel"
 import { Avatar, Icon, ProgressRing, StatusBadge, card, inputCls, primaryBtn, secondaryBtn, type IconName } from "../ui"
 import {
   disciplineLabel,
+  disciplineShort,
+  disciplines,
+  referralDetail,
   homeUnknown,
   socialItems,
   type Discipline,
@@ -88,10 +91,11 @@ export function Overview({ patient }: { patient: Patient }) {
         )}
 
         <Section title="Round summary" icon="stethoscope" aside={<RoundsChip patient={patient} />}>
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <PhysicianBox patient={patient} />
             <TherapyBox patient={patient} d="pt" />
             <TherapyBox patient={patient} d="ot" />
+            <TherapyBox patient={patient} d="slp" />
           </div>
         </Section>
 
@@ -289,7 +293,7 @@ function PatientMenu({ patient, onModal }: { patient: Patient; onModal: (m: "gen
               <span className="flex-1">Physician</span>
               {patient.roundedAt ? <Pill kind="good">Rounded {patient.roundedAt}</Pill> : <Pill kind="warn">Pending</Pill>}
             </li>
-            {(["pt", "ot"] as Discipline[]).map((d) => {
+            {disciplines.map((d) => {
               const [label, kind] = therapyStatus(patient.therapy?.[d])
               return (
                 <li key={d} className="flex items-center gap-2 text-[11px] text-[#3d554f]">
@@ -333,7 +337,7 @@ function PatientMenu({ patient, onModal }: { patient: Patient; onModal: (m: "gen
 }
 
 function RoundsChip({ patient }: { patient: Patient }) {
-  const pending = [!patient.roundedAt, ...(["pt", "ot"] as Discipline[]).map((d) => patient.therapy?.[d]?.status === "pending")].filter(Boolean).length
+  const pending = [!patient.roundedAt, ...disciplines.map((d) => patient.therapy?.[d]?.status === "pending")].filter(Boolean).length
   return pending ? <Pill kind="warn">{pending} pending</Pill> : <Pill kind="good">All seen</Pill>
 }
 
@@ -384,7 +388,7 @@ function PhysicianBox({ patient }: { patient: Patient }) {
 function TherapyBox({ patient, d }: { patient: Patient; d: Discipline }) {
   const { dispatch, notify } = useStore()
   const n = patient.therapy?.[d] ?? { status: "not-referred" as const }
-  const label = d === "pt" ? "PT" : "OT"
+  const label = disciplineShort[d]
   const owner = disciplineLabel[d]
   const referral = patient.tasks.find((t) => t.owner === owner && /evaluation/i.test(t.title) && !t.completed)
   const [statusLabel, kind] = therapyStatus(n)
@@ -417,7 +421,7 @@ function TherapyBox({ patient, d }: { patient: Patient; d: Discipline }) {
               const task: Task = {
                 id: `${patient.id}-${d}-${Date.now()}`,
                 title: `${label} evaluation`,
-                detail: `${owner} to assess function and recommend a discharge destination.`,
+                detail: referralDetail[d],
                 owner,
                 due: "Due today",
                 urgency: "Medium",

@@ -201,6 +201,39 @@ export async function searchEncounters(patientId: string) {
     .sort((a, b) => (b.period?.start ?? "").localeCompare(a.period?.start ?? ""))
 }
 
+export type FhirCondition = {
+  id: string
+  code?: { text?: string; coding?: { code?: string; display?: string }[] }
+  clinicalStatus?: { coding?: { code?: string }[] }
+  verificationStatus?: { coding?: { code?: string }[] }
+  onsetDateTime?: string
+  recordedDate?: string
+}
+export type FhirNote = {
+  id: string
+  docStatus?: string
+  status?: string
+  date?: string
+  type?: { text?: string; coding?: { display?: string }[] }
+  author?: { display?: string }[]
+  context?: { encounter?: { reference?: string }[] }
+}
+
+/** The patient's problem list (needs Condition.Search (Problems) on the app). */
+export async function searchProblems(patientId: string) {
+  const b = await fhir<Bundle<FhirCondition>>(`Condition?patient=${encodeURIComponent(patientId)}&category=problem-list-item`)
+  return (b.entry ?? []).map((e) => e.resource).filter((r) => r?.id && (r as { resourceType?: string }).resourceType !== "OperationOutcome")
+}
+
+/** Clinical notes, newest first (needs DocumentReference.Search (Clinical Notes) on the app). */
+export async function searchNotes(patientId: string) {
+  const b = await fhir<Bundle<FhirNote>>(`DocumentReference?patient=${encodeURIComponent(patientId)}&category=clinical-note`)
+  return (b.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r) => r?.id && (r as { resourceType?: string }).resourceType !== "OperationOutcome")
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+}
+
 export const patientName = (p: FhirPatient) =>
   p.name?.[0]?.text ?? [p.name?.[0]?.given?.join(" "), p.name?.[0]?.family].filter(Boolean).join(" ") ?? p.id
 

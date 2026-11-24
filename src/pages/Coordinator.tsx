@@ -25,7 +25,7 @@ import { EpicPanel } from "../components/EpicPanel"
 const HOUR = 3_600_000
 const clock = (ms: number) => new Date(ms).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })
 
-const tone = {
+export const tone = {
   neutral: "bg-[#eef2f0] text-[#5d7570]",
   progress: "bg-[#e6eef9] text-[#3f5f86]",
   warn: "bg-[#fff0d7] text-[#936018]",
@@ -536,6 +536,9 @@ function Setup({ patient, onStart }: { patient: Patient; onStart: (p: Profile) =
           </button>
         </div>
       </form>
+      <div className="mt-5">
+        <EpicPanel patient={patient} />
+      </div>
     </>
   )
 }

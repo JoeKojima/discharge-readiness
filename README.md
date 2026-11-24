@@ -30,7 +30,7 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 | Page | Route | What it does |
 | --- | --- | --- |
 | Overview | `#/` | Patient dashboard: every patient with unit stats, search, status filters, sorting, and **Add patient**. |
-| My patients | `#/patients/<id>` | Discharge command centre for one patient: readiness ring, primary blocker, checklist, AI clinical summary (dot points + A–G assessment), discharge plan, care team, and SNF facility comparison for patients going to a facility. |
+| My patients | `#/patients/<id>` | One discharge card per patient, top to bottom: header with readiness and a ☰ menu (automation status and rounds status per discipline); **Round summary** split into Physician (dot points + A–G), PT and OT; **Rehab tracker** (or discharge tracker for home) from the coordinator, with a start-automated-referral button; **Insurance** (plan, prior auth, portal); **Home situation** (address, home, support) with a flag and an ask-social-work task when nobody has asked yet; **Social work** checklist; the task **Checklist**; and the Epic write-back panel. |
 | Tasks | `#/tasks` | Unit task board in due-time order (Overdue, Due in the next hour, Later today, Tomorrow and later), groupable by patient or role, with Open / JMO list / Automations / Completed views and task automations. |
 | Coordinator | `#/coordinator`, `#/coordinator/<id>` | Outside-Epic discharge coordinator: facility matching, parallel referrals, follow-up, prior auth, equipment, home health, infusion, rides and family texts on one board per patient, plus Epic sandbox write-back. |
 | Rounds | `#/rounds/<id>` | Rounding list plus ambient capture: record the round, summarize it with AI, review and apply checklist updates. |

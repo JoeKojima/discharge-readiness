@@ -21,6 +21,7 @@ import { clockTime, nowTime } from "./logic"
 import { playbooks } from "./automation"
 import type { Coordination } from "./coordinator/engine"
 import { seedCoordination } from "./coordinator/seeds"
+import { withCareProfile, type HomeSituation, type SocialKey, type SocialState } from "./careProfile"
 import { defaultAiSettings, type AiSettings, type RoundsSummary } from "./ai"
 
 export type Settings = {
@@ -49,7 +50,7 @@ export const initialState = (): State => ({
   version: VERSION,
   signedIn: true,
   selectedId: seedPatients[0].id,
-  patients: structuredClone(seedPatients).map((p) => ({ ...p, coordination: seedCoordination(p) })),
+  patients: structuredClone(seedPatients).map((p) => withCareProfile({ ...p, coordination: seedCoordination(p) })),
   threads: structuredClone(seedThreads),
   settings: {
     highPriorityAlerts: true,
@@ -69,6 +70,8 @@ type Action =
   | { type: "setUrgency"; pid: string; tid: string; urgency: Urgency }
   | { type: "deleteTask"; pid: string; tid: string }
   | { type: "addTasks"; pid: string; tasks: Task[] }
+  | { type: "setHome"; pid: string; home: HomeSituation }
+  | { type: "setSocial"; pid: string; key: SocialKey; value: SocialState | undefined }
   | { type: "addPatient"; patient: Patient }
   | { type: "dischargePatient"; pid: string }
   | { type: "updateRounds"; pid: string; transcript: string; notes: string }
@@ -196,10 +199,19 @@ function reducer(state: State, action: Action): State {
       }))
     case "addTasks":
       return mapPatient(state, action.pid, (p) => ({ ...p, tasks: [...p.tasks, ...action.tasks] }))
+    case "setHome":
+      return mapPatient(state, action.pid, (p) => ({ ...p, home: action.home }))
+    case "setSocial":
+      return mapPatient(state, action.pid, (p) => {
+        const social = { ...p.social }
+        if (action.value) social[action.key] = action.value
+        else delete social[action.key]
+        return { ...p, social }
+      })
     case "addPatient":
       return {
         ...state,
-        patients: [...state.patients, action.patient],
+        patients: [...state.patients, withCareProfile(action.patient)],
         selectedId: action.patient.id,
       }
     case "dischargePatient": {
@@ -300,7 +312,7 @@ function load(): State {
     if (raw) {
       const parsed = JSON.parse(raw) as State
       const ai = { ...defaultAiSettings, ...parsed.ai }
-      if (parsed.version === VERSION) return { ...parsed, ai }
+      if (parsed.version === VERSION) return { ...parsed, ai, patients: parsed.patients.map(withCareProfile) }
       // Older saved data uses a different shape: start from fresh demo data but keep the AI connection.
       return { ...initialState(), ai }
     }

@@ -1,6 +1,7 @@
 export type Urgency = "High" | "Medium" | "Low"
 
 import type { Coordination } from "./coordinator/engine"
+import type { Discipline, HomeSituation, SocialKey, SocialState, TherapyNote } from "./careProfile"
 
 export type AutomationLog = { time: string; text: string }
 
@@ -83,6 +84,12 @@ export type Patient = {
   tasks: Task[]
   /** Outside-Epic discharge coordination (facilities, payers, vendors, family). */
   coordination?: Coordination
+  /** PT/OT findings from their own rounds. */
+  therapy?: Record<Discipline, TherapyNote>
+  /** Address, type of home and who is there to help. */
+  home?: HomeSituation
+  /** Social work items marked done or not needed; missing = still to do. */
+  social?: Partial<Record<SocialKey, SocialState>>
 }
 
 export type Staff = {
@@ -115,6 +122,7 @@ export const staff: Staff[] = [
   { id: "DW", initials: "DW", name: "Derek Wu", role: "Respiratory therapy", color: "#e0f2fe", text: "#2b5d7d", pager: "x4466", online: true },
   { id: "KO", initials: "KO", name: "Kara Olsen", role: "Charge nurse", color: "#fde2ef", text: "#7d3b5b", pager: "x4400", online: true },
   { id: "SB", initials: "SB", name: "Sam Becker", role: "Social work", color: "#ffe4d7", text: "#7c4a33", pager: "x4489", online: false },
+  { id: "NB", initials: "NB", name: "Nina Brooks", role: "Occupational therapy", color: "#efe4ff", text: "#5b4a86", pager: "x4475", online: true },
 ]
 
 const t = (
@@ -285,7 +293,7 @@ export const seedPatients: Patient[] = [
       "Mr. Brown is calm and oriented today, no restraints overnight. He's net negative and on oral Lasix now. He'll need skilled nursing, so case management should submit the prior auth today. Confirm Harborview has a bariatric bed and lift. Pharmacy to check the apixaban and Entresto are on their formulary.",
     notes:
       "HFrEF exacerbation, now euvolemic on PO furosemide. Delirium resolved; restraints discontinued 18h ago. BMI 41.",
-    careTeam: ["LC", "MR", "SB", "PN", "TH"],
+    careTeam: ["LC", "MR", "SB", "PN", "TH", "NB"],
     confidence: "Low, improving",
     trend: [3, 4, 4, 5, 6, 7, 8, 10],
     trendNote: "+6% since morning rounds",
@@ -524,7 +532,7 @@ export const seedPatients: Patient[] = [
       "Mr. Kim walked twenty feet with the walker and PT. He lives alone with stairs, so he'll need acute rehab. Recheck labs this afternoon for hemoglobin. Case management to send rehab referrals, and we need the prior authorization started.",
     notes:
       "POD2 R hip ORIF. Hgb 8.9 from 10.4, asymptomatic. Enoxaparin prophylaxis. WBAT.",
-    careTeam: ["LC", "TH", "MR", "SB"],
+    careTeam: ["LC", "TH", "NB", "MR", "SB"],
     confidence: "Low, stable",
     trend: [4, 4, 5, 5, 5, 6, 6, 6],
     trendNote: "+1% since morning rounds",

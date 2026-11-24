@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import type { Patient } from "../data"
+import { staff, type Patient } from "../data"
+import { getChart, simAct, simClear, simCreate, type SimChart, type SimStatus } from "../epicSim"
 import { when, type Coordination } from "../coordinator/engine"
 import {
   builtInClientId,
@@ -58,7 +59,7 @@ const problemFor = (p: Patient): [string, string] => {
 
 type Result = { label: string; request: unknown; response?: Created; error?: string; readBack?: Created }
 
-export function EpicPanel({ patient }: { patient: Patient }) {
+function RealSandbox({ patient }: { patient: Patient }) {
   const [clientId, setId] = useState(getClientId())
   const [token, setToken] = useState(getToken())
   const [error, setError] = useState<string | null>(null)
@@ -116,19 +117,17 @@ export function EpicPanel({ patient }: { patient: Patient }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   return (
-    <section className={`${card} p-5`} aria-label="Epic write-back">
+    <section aria-label="Real Epic sandbox">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-[13px] font-semibold text-[#29463f]">Epic write-back</h3>
-        <span className="rounded-full bg-[#e6eef9] px-2 py-0.5 text-[9px] font-semibold text-[#3f5f86]">Epic public sandbox · fake patients only</span>
         {token && (
           <span className="ml-auto flex items-center gap-1.5 text-[10px] font-semibold text-[#176b54]">
             <span className="h-2 w-2 rounded-full bg-[#35a881]" /> Connected until {new Date(token.expires_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
           </span>
         )}
       </div>
-      <p className="mt-1 text-[10px] leading-relaxed text-[#8a9894]">
-        Drafts go into Epic as things a clinician still has to act on: an unsigned note to sign, and a provisional problem to
-        reconcile. ClearPath's demo patients don't exist in Epic, so writes go to one of Epic's own sandbox test patients.
+      <p className="text-[10px] leading-relaxed text-[#8a9894]">
+        Sends the same requests to Epic's public sandbox (fhir.epic.com) instead. This path opens Epic's own sign-in page, and
+        writes go to one of Epic's fake test patients because ClearPath's demo patients don't exist there.
       </p>
 
       {error && (
@@ -313,6 +312,200 @@ export function EpicPanel({ patient }: { patient: Patient }) {
           ))}
         </ul>
       )}
+    </section>
+  )
+}
+
+// ---- Default: the Epic chart, simulated inside ClearPath ------------------------------
+
+const simTone: Record<SimStatus, string> = {
+  unsigned: "bg-[#fff0d7] text-[#936018]",
+  provisional: "bg-[#fff0d7] text-[#936018]",
+  signed: "bg-[#dcefe8] text-[#176b54]",
+  accepted: "bg-[#dcefe8] text-[#176b54]",
+  rejected: "bg-[#eef2f0] text-[#5d7570]",
+}
+const simLabel: Record<SimStatus, string> = {
+  unsigned: "Unsigned · waiting for signature",
+  provisional: "Provisional · in holding area",
+  signed: "Signed",
+  accepted: "Accepted to problem list",
+  rejected: "Rejected",
+}
+const clock = (ms: number) => new Date(ms).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })
+
+/**
+ * The Epic write-back demo. By default it runs against a simulated Epic chart in
+ * this browser (no Epic sign-in); the real public sandbox is an optional extra.
+ */
+export function EpicPanel({ patient }: { patient: Patient }) {
+  const [chart, setChart] = useState<SimChart>(() => getChart(patient))
+  const [noteType, setNoteType] = useState("11506-3")
+  const [note, setNote] = useState(() => draftCoordinationNote(patient, patient.coordination))
+  const [problem, setProblem] = useState<[string, string]>(() => problemFor(patient))
+  const [realOpen, setRealOpen] = useState(() => !!getToken())
+  const clinician = staff.find((s) => s.role === "Attending" && patient.careTeam.includes(s.id))?.name ?? "Attending physician"
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+
+  useEffect(() => {
+    setChart(getChart(patient))
+    setNote(draftCoordinationNote(patient, patient.coordination))
+    setProblem(problemFor(patient))
+  }, [patient])
+
+  const send = (request: { resourceType: string; [k: string]: unknown }, title: string) => {
+    simCreate(patient, request, title)
+    setChart(getChart(patient))
+  }
+  const act = (id: string, action: "sign" | "accept" | "reject") => setChart(simAct(patient, id, action, clinician))
+  const waiting = chart.items.filter((i) => i.status === "unsigned" || i.status === "provisional").length
+
+  return (
+    <section className={`${card} p-5`} aria-label="Epic chart">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-[14px] font-semibold text-[#1b4037]">Epic chart</h3>
+        <span className="rounded-full bg-[#e6eef9] px-2 py-0.5 text-[9px] font-semibold text-[#3f5f86]">Simulated · stays in this browser</span>
+        {waiting > 0 && (
+          <span className="ml-auto rounded-full bg-[#fff0d7] px-2 py-0.5 text-[9px] font-semibold text-[#936018]">{waiting} waiting for a clinician</span>
+        )}
+      </div>
+      <p className="mt-1 text-[10px] leading-relaxed text-[#8a9894]">
+        ClearPath writes back to the chart only as things a clinician still has to act on: an unsigned note to sign, and a provisional
+        problem to accept or reject. The requests are the same FHIR calls Epic's real API takes; here a simulated Epic answers them, so no
+        sign-in is needed.
+      </p>
+
+      <dl className="mt-3 grid gap-2 rounded-xl border border-[#e2e9e6] bg-[#fafcfb] p-3 text-[11px] sm:grid-cols-3">
+        <div>
+          <dt className="text-[9px] font-semibold uppercase tracking-[.08em] text-[#8a9894]">Patient</dt>
+          <dd className="font-medium text-[#3d554f]">
+            {patient.name} · MRN {patient.mrn}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[9px] font-semibold uppercase tracking-[.08em] text-[#8a9894]">Encounter</dt>
+          <dd className="font-medium text-[#3d554f]">
+            Inpatient · {patient.room} · day {patient.los}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-[9px] font-semibold uppercase tracking-[.08em] text-[#8a9894]">FHIR ids</dt>
+          <dd className="truncate font-mono text-[10px] text-[#5d7570]" title={`Patient/${chart.fhirId} · Encounter/${chart.encounterId}`}>
+            Patient/{chart.fhirId}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
+        <div className="space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold text-[#29463f]">Send an unsigned note</p>
+            <select value={noteType} onChange={(e) => setNoteType(e.target.value)} aria-label="Note type" className={`${inputCls} mt-2`}>
+              {noteTypes.map((n) => (
+                <option key={n.code} value={n.code}>
+                  {n.name} (LOINC {n.code})
+                </option>
+              ))}
+            </select>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              aria-label="Note text"
+              className="mt-2 h-40 w-full rounded-lg border border-[#d9e3e0] p-2.5 font-mono text-[10px] leading-relaxed text-[#3d554f] outline-none focus:border-[#74a99a]"
+            />
+            <button
+              disabled={!note.trim()}
+              onClick={() => send(noteRequest(chart.fhirId, chart.encounterId, noteType, note), noteTypes.find((n) => n.code === noteType)?.name ?? "Note")}
+              className={`${primaryBtn} mt-2 disabled:opacity-40`}
+            >
+              <Icon name="send" size={13} /> Send unsigned note to Epic
+            </button>
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-[#29463f]">Propose a problem</p>
+            <div className="mt-2 grid grid-cols-[100px_1fr] gap-2">
+              <input value={problem[0]} onChange={(e) => setProblem([e.target.value, problem[1]])} aria-label="ICD-10 code" className={inputCls} />
+              <input value={problem[1]} onChange={(e) => setProblem([problem[0], e.target.value])} aria-label="Problem name" className={inputCls} />
+            </div>
+            <button
+              disabled={!problem[0].trim() || !problem[1].trim()}
+              onClick={() => send(problemRequest(chart.fhirId, problem[0].trim(), problem[1].trim(), today), `${problem[0].trim()} · ${problem[1].trim()}`)}
+              className={`${secondaryBtn} mt-2 disabled:opacity-40`}
+            >
+              Propose problem in Epic
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-[#29463f]">In Epic</p>
+            {chart.items.length > 0 && (
+              <button
+                onClick={() => {
+                  simClear(patient)
+                  setChart(getChart(patient))
+                }}
+                className="text-[10px] font-semibold text-[#8a6a5f] hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <ul className="mt-2 space-y-2" aria-label="Items in Epic">
+            {chart.items.map((it) => (
+              <li key={it.id} className="rounded-xl border border-[#e2e9e6] bg-white p-3">
+                <div className="flex flex-wrap items-start gap-2">
+                  <Icon name={it.kind === "note" ? "document" : "flag"} size={14} className="mt-0.5 text-[#5d7570]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-[#29463f]">{it.kind === "note" ? it.title : `Problem: ${it.title}`}</p>
+                    <p className="text-[9px] text-[#8a9894]">
+                      From ClearPath {clock(it.at)}
+                      {it.actedBy ? ` · ${it.status} by ${it.actedBy} ${clock(it.actedAt!)}` : ""}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${simTone[it.status]}`}>{simLabel[it.status]}</span>
+                </div>
+                {it.status === "unsigned" && (
+                  <button onClick={() => act(it.id, "sign")} className={`${primaryBtn} mt-2`}>
+                    <Icon name="check" size={12} /> Sign as {clinician}
+                  </button>
+                )}
+                {it.status === "provisional" && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button onClick={() => act(it.id, "accept")} className={primaryBtn}>
+                      <Icon name="check" size={12} /> Accept
+                    </button>
+                    <button onClick={() => act(it.id, "reject")} className={secondaryBtn}>
+                      Reject
+                    </button>
+                  </div>
+                )}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[10px] text-[#6c807a]">FHIR request and Epic's response</summary>
+                  <pre className="mt-1 max-h-60 overflow-auto rounded-lg bg-[#fafcfb] p-2 text-[9px] leading-relaxed text-[#3d554f]">
+                    {JSON.stringify({ request: { method: "POST", url: it.request.resourceType, body: it.request }, response: it.response }, null, 2)}
+                  </pre>
+                </details>
+              </li>
+            ))}
+            {chart.items.length === 0 && (
+              <li className="rounded-xl border border-dashed border-[#d7e2de] p-4 text-center text-[11px] text-[#8a9894]">
+                Nothing sent yet. Send the coordinator's note or propose a problem.
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <details className="mt-5 rounded-xl border border-[#e2e9e6] p-3" open={realOpen} onToggle={(e) => e.target === e.currentTarget && setRealOpen(e.currentTarget.open)}>
+        <summary className="cursor-pointer text-[11px] font-semibold text-[#385149]">Optional: send to Epic's real public sandbox instead (needs Epic sign-in)</summary>
+        {realOpen && (
+          <div className="mt-3">
+            <RealSandbox patient={patient} />
+          </div>
+        )}
+      </details>
     </section>
   )
 }

@@ -7,6 +7,7 @@ import { Patients } from "./pages/Patients"
 import { Tasks } from "./pages/Tasks"
 import { Rounds } from "./pages/Rounds"
 import { Messages } from "./pages/Messages"
+import { Coordinator } from "./pages/Coordinator"
 import { Settings } from "./pages/Settings"
 import { Icon, type IconName } from "./ui"
 
@@ -61,6 +62,8 @@ function Shell() {
         ? "My patients"
         : section === "tasks"
           ? "Tasks"
+          : section === "coordinator"
+            ? "Coordinator"
           : section === "rounds"
             ? "Rounds"
             : section === "messages"
@@ -73,11 +76,17 @@ function Shell() {
     { label: "Overview", icon: "home", href: "#/" },
     { label: "My patients", icon: "patients", href: `#/patients/${state.selectedId}`, count: state.patients.length },
     { label: "Tasks", icon: "check", href: "#/tasks", count: openCount },
+    {
+      label: "Coordinator",
+      icon: "bolt",
+      href: "#/coordinator",
+      count: state.patients.reduce((n, p) => n + (p.coordination?.gates.filter((g) => !g.resolved).length ?? 0), 0) || undefined,
+    },
     { label: "Rounds", icon: "stethoscope", href: `#/rounds/${state.selectedId}` },
     { label: "Messages", icon: "message", href: "#/messages", count: unread || undefined },
   ]
 
-  const knownSection = ["", "patients", "tasks", "rounds", "messages", "settings"].includes(section)
+  const knownSection = ["", "patients", "tasks", "coordinator", "rounds", "messages", "settings"].includes(section)
   const missingPatient = (section === "patients" || section === "rounds") && routeId && !state.patients.some((p) => p.id === routeId)
 
   let page
@@ -86,6 +95,7 @@ function Shell() {
   else if (!patient && ["patients", "rounds"].includes(section)) page = <EmptyList />
   else if (section === "patients") page = <Overview key={patient!.id} patient={patient!} />
   else if (section === "tasks") page = <Tasks />
+  else if (section === "coordinator") page = <Coordinator key={routeId ?? "unit"} patientId={routeId} />
   else if (section === "rounds") page = <Rounds patient={patient!} />
   else if (section === "messages") page = <Messages key={routeId ?? "inbox"} threadId={routeId} />
   else page = <Settings />

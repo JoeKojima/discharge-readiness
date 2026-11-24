@@ -19,6 +19,8 @@ import {
 } from "./data"
 import { clockTime, nowTime } from "./logic"
 import { playbooks } from "./automation"
+import type { Coordination } from "./coordinator/engine"
+import { seedCoordination } from "./coordinator/seeds"
 import { defaultAiSettings, type AiSettings, type RoundsSummary } from "./ai"
 
 export type Settings = {
@@ -39,14 +41,15 @@ export type State = {
 }
 
 // 3: summary became dot points and patients gained an A–G assessment.
-const VERSION = 3
+// 4: discharge coordinator seeds.
+const VERSION = 4
 const KEY = "clearpath-state"
 
 export const initialState = (): State => ({
   version: VERSION,
   signedIn: true,
   selectedId: seedPatients[0].id,
-  patients: structuredClone(seedPatients),
+  patients: structuredClone(seedPatients).map((p) => ({ ...p, coordination: seedCoordination(p) })),
   threads: structuredClone(seedThreads),
   settings: {
     highPriorityAlerts: true,
@@ -60,6 +63,7 @@ export const initialState = (): State => ({
 type Action =
   | { type: "select"; id: string }
   | { type: "toggleTask"; pid: string; tid: string }
+  | { type: "coordSet"; pid: string; coordination: Coordination | undefined }
   | { type: "automationStart"; pid: string; tid: string }
   | { type: "automationResolve"; pid: string; tid: string; outcome: "success" | "fallback"; timedOut?: boolean }
   | { type: "setUrgency"; pid: string; tid: string; urgency: Urgency }
@@ -103,6 +107,33 @@ function reducer(state: State, action: Action): State {
         due: t.completed ? (t.openDue ?? "Due today") : `Completed ${nowTime()}`,
         openDue: t.completed ? undefined : t.due,
       }))
+    case "coordSet":
+      return mapPatient(state, action.pid, (p) => {
+        const c = action.coordination
+        // Facility admission rules the coordinator found go onto the checklist once.
+        const key = (x: string) => x.toLowerCase().split(/[^a-z0-9-]+/).filter((w) => w.length > 3)
+        const adds = (c?.checklistAdds ?? []).filter(
+          (a) => !p.tasks.some((t) => key(a.title).filter((w) => t.title.toLowerCase().includes(w)).length >= 2),
+        )
+        return {
+          ...p,
+          coordination: c,
+          tasks: [
+            ...p.tasks,
+            ...adds.map((a, i) => ({
+              id: `${p.id}-c${Date.now()}-${i}`,
+              title: a.title,
+              detail: a.detail,
+              owner: "Nursing",
+              due: "Before discharge",
+              urgency: "High" as const,
+              effort: "10 min",
+              category: "Documentation",
+              completed: false,
+            })),
+          ],
+        }
+      })
     case "automationStart": {
       return mapTask(state, action.pid, action.tid, (t) => {
         const pb = playbooks.find((p) => p.match.test(t.title))

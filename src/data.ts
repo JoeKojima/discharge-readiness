@@ -1,5 +1,7 @@
 export type Urgency = "High" | "Medium" | "Low"
 
+import type { Coordination } from "./coordinator/engine"
+
 export type AutomationLog = { time: string; text: string }
 
 export type Task = {
@@ -79,6 +81,8 @@ export type Patient = {
   plan: { label: string; value: string }[]
   snf?: { barriers: Barrier[]; referralSentTo?: string }
   tasks: Task[]
+  /** Outside-Epic discharge coordination (facilities, payers, vendors, family). */
+  coordination?: Coordination
 }
 
 export type Staff = {

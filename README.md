@@ -32,6 +32,7 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 | Overview | `#/` | Patient dashboard: every patient with unit stats, search, status filters, sorting, and **Add patient**. |
 | My patients | `#/patients/<id>` | Discharge command centre for one patient: readiness ring, primary blocker, checklist, AI clinical summary (dot points + A–G assessment), discharge plan, care team, and SNF facility comparison for patients going to a facility. |
 | Tasks | `#/tasks` | Unit task board in due-time order (Overdue, Due in the next hour, Later today, Tomorrow and later), groupable by patient or role, with Open / JMO list / Automations / Completed views and task automations. |
+| Coordinator | `#/coordinator`, `#/coordinator/<id>` | Outside-Epic discharge coordinator: facility matching, parallel referrals, follow-up, prior auth, equipment, home health, infusion, rides and family texts on one board per patient, plus Epic sandbox write-back. |
 | Rounds | `#/rounds/<id>` | Rounding list plus ambient capture: record the round, summarize it with AI, review and apply checklist updates. |
 | Messages | `#/messages` | Care team inbox with threads tied to patients. Sending a message gets a simulated reply. |
 | Settings | `#/settings` | Profile, preference toggles, **AI rounds summarizer** connection, and **Reset demo data**. |
@@ -47,6 +48,16 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
   - **Demo only:** don't record real patient information. When on-device recognition isn't available, browser speech recognition may send audio to Google or Apple, and none of this is set up for HIPAA.
 - **A–G rounds note:** each round is written up as Airway, Breathing, Circulation, Disability, Exposure, Fluids and Glucose alongside the dot-point summary. On the review screen each letter is editable; letters not covered in the round keep their previous finding.
 - **Task automations** (Tasks page, ⚡ **Automate**): a playbook runs the routine steps of a task and waits on the step that needs a person, with a fallback if it doesn't happen. For example, a repeat Hb is ordered on a pathology request and the phlebotomist is paged; if they can't collect (or there's no response within an hour), the task moves to the **JMO list** as high priority. Playbooks also cover discharge scripts (pharmacist verification), follow-up bookings, equipment delivery, coverage checks, and referrals and authorisations. **These are simulated in the demo:** nothing is sent to pathology, paging, pharmacy or booking systems.
+- **Discharge coordinator** (Tier 1 of the social work task inventory: the admin work that happens outside Epic). Staff enter a short profile (destination, insurance, zip, care needs, family contact) and approve the referral packet. The coordinator then works every outside party in parallel:
+  - matches facilities from its own directory (level of care, capabilities, insurance, acceptance history, distance) and explains exclusions
+  - verifies the family's number by text, sends them the facility list and collects ranked choices
+  - faxes referrals to every chosen facility at once, recovers from failed faxes, calls non-responders on a schedule, sends extra documents on request, auto-advances to the next match after a denial, and confirms the bed with the family's best acceptance
+  - adds facility admission rules (e.g. 24 h restraint-free) to the patient's checklist
+  - submits prior auth on the payer portal with deadline tracking (front-loaded before weekends), drafts appeals for a clinician to sign and books the peer-to-peer
+  - for home discharges, orders equipment and moves delivery into the caregiver's window, refers to several home health agencies at once (first to accept wins), and chases the infusion medical-benefit approval
+  - books the right ride, and keeps the family updated by text; distress goes to the social worker instead of an automatic reply
+  **All outreach is simulated:** outside parties respond from the directory's stats on a simulated clock you control (+1 h, +4 h, next event, play). Nothing is faxed, called, texted or submitted.
+- **Epic write-back (real public sandbox)**: on a coordinator board, connect to Epic's public FHIR sandbox (fhir.epic.com) with a SMART on FHIR standalone launch (public client, PKCE, no server). It reads a sandbox test patient and their encounters, then writes an **unsigned discharge-coordination note** (`DocumentReference`, `docStatus: preliminary`) and a **provisional problem** (`Condition`, lands in the reconciliation queue), and reads the note back. Setup: register a non-production app at fhir.epic.com (audience: clinicians/staff; not a confidential client; APIs Patient.Read, Encounter.Search, DocumentReference.Create (Clinical Notes), Condition.Create (Problems), DocumentReference.Read, Condition.Read; redirect URI = the site URL without `#`), paste the client ID into the panel, and sign in with a clinician test user from Epic's test-data page. Only Epic's fake sandbox patients are used; Epic wipes sandbox writes weekly.
 - Checking off, re-prioritizing (task ⋯ menu), deleting, and adding tasks updates readiness, status, open effort, the primary blocker, and the unit dashboard.
 - **Readiness** = clinical baseline + the weighted share of each completed task. Each task gets points for urgency (High 3, Medium 2, Low 1) plus 1 if it takes 30 min or more; its share of the gap to 100% is its points ÷ the checklist's total points. **How is X% calculated?** on the command centre shows the full breakdown, and each task shows what it adds, why, and its share of the patient's open workload. Status is derived from readiness and open high-priority tasks.
 - When every task is done, **Discharge patient** removes the patient from the list.
@@ -59,6 +70,8 @@ Routes use the URL hash (`#/patients`, `#/tasks`, ...) so every page and refresh
 - `src/logic.ts`: readiness and status math, checklist extraction rules, due-time parsing
 - `src/summarize.ts`: built-in rounds summarizer (dot points, A–G, checklist changes)
 - `src/automation.ts`: task automation playbooks
+- `src/coordinator/`: discharge coordinator (directory and matching, simulation engine, seed scenarios)
+- `src/epic.ts`: Epic sandbox SMART sign-in (PKCE) and FHIR read/write
 - `src/ambient.ts`: live mic transcription (Web Speech API, on-device first)
 - `src/ai.ts`: Claude rounds summarizer (prompt, JSON schema, rule-based fallback)
 - `src/store.tsx`: app state (reducer and localStorage) and hash router

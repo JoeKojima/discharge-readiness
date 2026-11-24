@@ -72,6 +72,14 @@ export function Overview({ patient }: { patient: Patient }) {
           <p className="mt-1 text-[13px] text-[#70807c]">AI-prioritized actions from rounds, notes, and the care team.</p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href={`#/coordinator/${patient.id}`}
+            className="hidden items-center gap-2 rounded-xl border border-[#d9e3e0] bg-white px-3.5 py-3 text-[11px] font-semibold text-[#176b54] shadow-sm hover:border-[#b9ccc6] sm:flex"
+          >
+            <Icon name="bolt" size={14} />
+            {patient.coordination ? "Coordinator" : "Start coordinator"}
+            {patient.coordination?.gates.some((g) => !g.resolved) && <span className="h-2 w-2 rounded-full bg-[#d9a24a]" />}
+          </a>
           <button
             onClick={() => setModal("generate")}
             className="flex items-center gap-2 rounded-xl bg-[#156d53] px-4 py-2.5 text-[12px] font-semibold text-white sm:hidden"

@@ -123,6 +123,7 @@ export const staff: Staff[] = [
   { id: "KO", initials: "KO", name: "Kara Olsen", role: "Charge nurse", color: "#fde2ef", text: "#7d3b5b", pager: "x4400", online: true },
   { id: "SB", initials: "SB", name: "Sam Becker", role: "Social work", color: "#ffe4d7", text: "#7c4a33", pager: "x4489", online: false },
   { id: "NB", initials: "NB", name: "Nina Brooks", role: "Occupational therapy", color: "#efe4ff", text: "#5b4a86", pager: "x4475", online: true },
+  { id: "BOT", initials: "AI", name: "ClearPath assistant", role: "Discharge reminders", color: "#dcefe8", text: "#176b54", pager: "—", online: true },
 ]
 
 const t = (

@@ -21,6 +21,7 @@ import { clockTime, nowTime } from "./logic"
 import { playbooks } from "./automation"
 import type { Coordination } from "./coordinator/engine"
 import { seedCoordination } from "./coordinator/seeds"
+import { escalateText, nudgeText, resolvedText, type Reminder, type ReminderLevel } from "./reminders"
 import { withCareProfile, type HomeSituation, type SocialKey, type SocialState } from "./careProfile"
 import { defaultAiSettings, type AiSettings, type RoundsSummary } from "./ai"
 
@@ -39,6 +40,8 @@ export type State = {
   threads: Thread[]
   settings: Settings
   ai: AiSettings
+  /** Reminders the assistant has already sent: key → level and what it was about. */
+  reminders?: Record<string, { level: ReminderLevel; pid: string; title: string }>
 }
 
 // 3: summary became dot points and patients gained an A–G assessment.
@@ -83,6 +86,7 @@ type Action =
   | { type: "sendMessage"; threadId: string; text: string; from: "me" | "them" }
   | { type: "startThread"; thread: Thread }
   | { type: "readThread"; threadId: string }
+  | { type: "remind"; reminders: Reminder[] }
   | { type: "setting"; key: keyof Settings; value: boolean }
   | { type: "signOut" }
   | { type: "signIn" }
@@ -287,6 +291,34 @@ function reducer(state: State, action: Action): State {
       }
     case "startThread":
       return { ...state, threads: [action.thread, ...state.threads] }
+    case "remind": {
+      const prev = state.reminders ?? {}
+      const next: NonNullable<State["reminders"]> = {}
+      const posts: { pid: string; text: string }[] = []
+      for (const r of action.reminders) {
+        next[r.key] = { level: r.level, pid: r.pid, title: r.title }
+        const was = prev[r.key]
+        if (!was) posts.push({ pid: r.pid, text: r.level === "escalated" ? `${nudgeText(r)} ${escalateText(r)}` : nudgeText(r) })
+        else if (was.level === "nudge" && r.level === "escalated") posts.push({ pid: r.pid, text: escalateText(r) })
+      }
+      for (const [key, was] of Object.entries(prev))
+        if (!next[key] && state.patients.some((p) => p.id === was.pid)) posts.push({ pid: was.pid, text: resolvedText(was.title) })
+      const same = Object.keys(prev).length === Object.keys(next).length && Object.entries(next).every(([k, v]) => prev[k]?.level === v.level)
+      if (same && !posts.length) return state
+      let threads = state.threads
+      for (const post of posts) {
+        const id = `bot-${post.pid}`
+        const name = state.patients.find((p) => p.id === post.pid)?.name ?? "patient"
+        const msg = { from: "them" as const, text: post.text, time: nowTime() }
+        threads = threads.some((t) => t.id === id)
+          ? threads.map((t) => (t.id === id ? { ...t, unread: true, messages: [...t.messages, msg] } : t))
+          : [{ id, staffId: "BOT", patientId: post.pid, subject: `Discharge reminders · ${name}`, unread: true, messages: [msg] }, ...threads]
+      }
+      // Newest assistant activity first.
+      const touched = new Set(posts.map((p) => `bot-${p.pid}`))
+      threads = [...threads.filter((t) => touched.has(t.id)), ...threads.filter((t) => !touched.has(t.id))]
+      return { ...state, reminders: next, threads }
+    }
     case "readThread":
       return {
         ...state,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { openTasks } from "./logic"
+import { findReminders } from "./reminders"
 import { navigate, StoreProvider, usePatient, useRoute, useStore } from "./store"
 import { GeneratorModal } from "./components/Modals"
 import { Overview } from "./pages/Overview"
@@ -26,6 +27,16 @@ function greeting() {
 
 function Shell() {
   const { state, dispatch, toast } = useStore()
+
+  // The ClearPath assistant: re-check for unaddressed discharge items on every change and each minute.
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+  useEffect(() => {
+    if (state.signedIn) dispatch({ type: "remind", reminders: findReminders(state.patients) })
+  }, [state.patients, state.signedIn, tick, dispatch])
   const path = useRoute()
   const [mobileNav, setMobileNav] = useState(false)
   const [generating, setGenerating] = useState(false)

@@ -36,8 +36,12 @@ export function Messages({ threadId }: { threadId?: string }) {
     setDraft("")
     setTyping(true)
     const id = active.id
+    const bot = active.staffId === "BOT"
     window.setTimeout(() => {
-      dispatch({ type: "sendMessage", threadId: id, text: replies[Math.floor(Math.random() * replies.length)], from: "them" })
+      const reply = bot
+        ? "Noted. I'll keep watching and post here when it's resolved, or escalate if it's still open."
+        : replies[Math.floor(Math.random() * replies.length)]
+      dispatch({ type: "sendMessage", threadId: id, text: reply, from: "them" })
       dispatch({ type: "readThread", threadId: id })
       setTyping(false)
     }, 1600)

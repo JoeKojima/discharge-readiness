@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import type { Patient } from "../data"
 import { when, type Coordination } from "../coordinator/engine"
 import {
+  builtInClientId,
   connect,
   create,
   disconnect,
@@ -156,6 +157,11 @@ export function EpicPanel({ patient }: { patient: Patient }) {
               <li>Save, then paste the <b>non-production</b> client ID below. Epic says new apps can take up to an hour to work in the sandbox.</li>
             </ol>
           </details>
+          {builtInClientId() && clientId === builtInClientId() && (
+            <p className="text-[10px] text-[#5d7570]">
+              This site already has ClearPath's sandbox client ID filled in, so you can connect straight away. Paste your own to use a different app.
+            </p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <label className="flex-1">
               <span className="sr-only">Non-production client ID</span>

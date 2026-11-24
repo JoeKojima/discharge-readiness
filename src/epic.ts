@@ -44,7 +44,17 @@ const safe = <T,>(fn: () => T, fallback: T): T => {
 /** Where Epic sends the user back: this page without the hash (Epic forbids fragments in redirect URIs). */
 export const redirectUri = () => `${window.location.origin}${window.location.pathname}`
 
-export const getClientId = () => safe(() => localStorage.getItem(CLIENT_KEY) ?? "", "")
+/**
+ * ClearPath's own non-production app on fhir.epic.com, keyed by the redirect
+ * URI it was registered with. A public client's ID isn't a secret; it only
+ * works for these redirect URIs and Epic's sandbox.
+ */
+const builtInClients: Record<string, string> = {
+  "https://joekojima.github.io/discharge-readiness/": "0f916b89-76b7-4e6f-878c-3bd66d5621ad",
+}
+export const builtInClientId = () => builtInClients[redirectUri()] ?? ""
+
+export const getClientId = () => safe(() => localStorage.getItem(CLIENT_KEY) || builtInClientId(), builtInClientId())
 export const setClientId = (id: string) => safe(() => localStorage.setItem(CLIENT_KEY, id.trim()), undefined)
 
 export function getToken(): EpicToken | null {

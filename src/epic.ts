@@ -101,6 +101,29 @@ export async function connect(returnHash: string) {
   window.location.assign(`${AUTHORIZE}?${q}`)
 }
 
+const AUTO_KEY = "clearpath-epic-auto" // sessionStorage: auto sign-in already tried in this tab
+
+/**
+ * Sign in to Epic as soon as the site opens. Tries once per tab, so a cancelled
+ * or failed sign-in doesn't loop; a successful one clears the flag so an expired
+ * session signs in again on the next load. Returns true if the page is leaving.
+ */
+export async function autoConnect(): Promise<boolean> {
+  if (getToken()) {
+    safe(() => sessionStorage.removeItem(AUTO_KEY), undefined)
+    return false
+  }
+  if (!getClientId() || /[?&]noepic\b/.test(window.location.search)) return false
+  if (safe(() => sessionStorage.getItem(AUTO_KEY), "1")) return false
+  try {
+    sessionStorage.setItem(AUTO_KEY, "1")
+    await connect(window.location.hash || "#/")
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Finish sign-in when Epic redirects back with ?code=…&state=…. Runs once at
  * startup, before the hash router reads the URL.
